@@ -62,6 +62,7 @@
 #define ALX_IPA_SYS_PIPE_MAX_PKTS_DESC 200
 #define ALX_IPA_SYS_PIPE_MIN_PKTS_DESC 5
 #define ALX_IPA_SYS_PIPE_DNE_PKTS ALX_IPA_SYS_PIPE_MAX_PKTS_DESC*3
+#define ALX_IPA_INACTIVITY_DELAY_MS 1000
 /* Protocol Specific Offsets*/
 #define ALX_IP_OFFSET       14
 #define ALX_IP_HEADER_SIZE  20
@@ -726,14 +727,38 @@ struct alx_ipa_stats {
 	uint64_t ipa_low_watermark_cnt;
 };
 
+enum alx_ipa_rm_state {
+	ALX_IPA_RM_RELEASED,
+	ALX_IPA_RM_REQUESTED,
+	ALX_IPA_RM_GRANT_PENDING,
+	ALX_IPA_RM_GRANTED,
+};
+
 /**
- *  * struct alx_ipa_ctx - ALX IPA Context
- *  * @stats: ALX - IPA brigde stats
- *  * @debugfs_dir: Debug FS handle for alx
- *  */
+ * struct alx_ipa_ctx - ALX IPA Context
+ *  @stats: ALX - IPA brigde stats
+ *  @debugfs_dir: Debug FS handle for alx
+ *  @ipa_prod_rm_state: IPA Producer Pipe RM state
+ *  @ipa_cons_rm_state: IPA Consumer Pipe RM state
+ *  @alx_ipa_perf_requested: Set to true when perf profile have been requested.
+ *  @ipa_rm_lock: Lock to syncronize IPA Prod/Cons RM state access
+ *  @rm_ipa_lock: Lock to syncronize ipa_rx_completion access
+ *  @ipa_rx_completion: Keeps track of pending IPA WRITE DONE Evts
+ *  @ipa_comp_wait: Wait source used to keep APPS awake
+ *                  when packets are submitted to IPA
+ **/
 struct alx_ipa_ctx {
 	struct alx_ipa_stats stats;
 	struct dentry *debugfs_dir;
+	enum alx_ipa_rm_state ipa_prod_rm_state;
+	enum alx_ipa_rm_state ipa_cons_rm_state;
+	bool alx_ipa_perf_requested;
+	spinlock_t ipa_rm_state_lock;
+	spinlock_t rm_ipa_lock;
+	uint64_t ipa_rx_completion;
+	uint64_t alx_tx_completion;
+	bool acquire_wake_src;
+	struct wakeup_source rm_ipa_wait;
 };
 
 struct alx_ipa_rx_desc_node {

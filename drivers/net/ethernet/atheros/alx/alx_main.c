@@ -1681,32 +1681,36 @@ static int alx_request_msix_irq(struct alx_adapter *adpt)
 
 		if (CHK_MSIX_FLAG(RXS) && CHK_MSIX_FLAG(TXS)) {
 			handler = alx_msix_rtx;
-			sprintf(msix->name, "%s:%s%d",
+			snprintf(msix->name, sizeof(msix->name), "%s:%s%d",
 					    netdev->name, "rtx", rx_idx);
 			rx_idx++;
 			tx_idx++;
 		} else if (CHK_MSIX_FLAG(RXS)) {
 			handler = alx_msix_rtx;
-			sprintf(msix->name, "%s:%s%d",
+			snprintf(msix->name, sizeof(msix->name), "%s:%s%d",
 					    netdev->name, "rx", rx_idx);
 			rx_idx++;
 		} else if (CHK_MSIX_FLAG(TXS)) {
 			handler = alx_msix_rtx;
-			sprintf(msix->name, "%s:%s%d",
+			snprintf(msix->name, sizeof(msix->name), "%s:%s%d",
 					    netdev->name, "tx", tx_idx);
 			tx_idx++;
 		} else if (CHK_MSIX_FLAG(TIMER)) {
 			handler = alx_msix_timer;
-			sprintf(msix->name, "%s:%s", netdev->name, "timer");
+			snprintf(msix->name, sizeof(msix->name), "%s:%s",
+						netdev->name, "timer");
 		} else if (CHK_MSIX_FLAG(ALERT)) {
 			handler = alx_msix_alert;
-			sprintf(msix->name, "%s:%s", netdev->name, "alert");
+			snprintf(msix->name, sizeof(msix->name), "%s:%s",
+						netdev->name, "alert");
 		} else if (CHK_MSIX_FLAG(SMB)) {
 			handler = alx_msix_smb;
-			sprintf(msix->name, "%s:%s", netdev->name, "smb");
+			snprintf(msix->name, sizeof(msix->name), "%s:%s",
+						netdev->name, "smb");
 		} else if (CHK_MSIX_FLAG(PHY)) {
 			handler = alx_msix_phy;
-			sprintf(msix->name, "%s:%s", netdev->name, "phy");
+			snprintf(msix->name, sizeof(msix->name), "%s:%s",
+						netdev->name, "phy");
 		} else {
 			netif_dbg(adpt, ifup, adpt->netdev,
 				   "MSIX entry [%d] is blank\n",
@@ -3022,7 +3026,7 @@ static int alx_open_internal(struct alx_adapter *adpt, u32 ctrl)
 	/* check link status */
 	SET_ADPT_FLAG(0, TASK_LSC_REQ);
 	adpt->link_jiffies = jiffies + ALX_TRY_LINK_TIMEOUT;
-#ifndef ALX_HIB_TIMER_CONFIG
+#ifdef ALX_HIB_TIMER_CONFIG
 	mod_timer(&adpt->alx_timer, jiffies);
 #endif
 	return retval;
@@ -3054,7 +3058,7 @@ static void alx_stop_internal(struct alx_adapter *adpt, u32 ctrl)
 
 	CLI_ADPT_FLAG(0, TASK_LSC_REQ);
 	CLI_ADPT_FLAG(0, TASK_REINIT_REQ);
-#ifndef ALX_HIB_TIMER_CONFIG
+#ifdef ALX_HIB_TIMER_CONFIG
 	del_timer_sync(&adpt->alx_timer);
 #endif
 	if (ctrl & ALX_OPEN_CTRL_RESET_PHY)
@@ -3869,7 +3873,8 @@ static void alx_tx_map(struct alx_adapter *adpt,
 	 * The last buffer info contain the skb address,
 	 * so it will be free after unmap
 	 */
-	tpbuf->skb = skb;
+	if (tpbuf)
+		tpbuf->skb = skb;
 }
 
 
@@ -4558,7 +4563,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
 #endif
 	alx_set_ethtool_ops(netdev);
 	netdev->watchdog_timeo = ALX_WATCHDOG_TIME;
-	strncpy(netdev->name, pci_name(pdev), sizeof(netdev->name) - 1);
+	strlcpy(netdev->name, pci_name(pdev), sizeof(netdev->name) - 1);
 
 
 	adpt->bd_number = cards_found;
@@ -4762,7 +4767,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
 	device_set_wakeup_enable(&adpt->pdev->dev, adpt->wol);
 
 	SET_ADPT_FLAG(1, STATE_DOWN);
-	strcpy(netdev->name, "eth%d");
+	strlcpy(netdev->name, "eth%d", sizeof(netdev->name) - 1);
 	retval = register_netdev(netdev);
 	if (retval) {
 		alx_err(adpt, "register netdevice failed\n");

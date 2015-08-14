@@ -1135,7 +1135,9 @@ static bool alx_handle_tx_irq(struct alx_msix_param *msix,
 		}
 
 		if (tpbuf->skb) {
-			dev_kfree_skb_irq(tpbuf->skb);
+			/* Since its called by NAPI; we are already in bh
+			context; so its safe to free the skb here*/
+			dev_kfree_skb(tpbuf->skb);
 			tpbuf->skb = NULL;
 		}
 
@@ -3026,7 +3028,7 @@ static int alx_open_internal(struct alx_adapter *adpt, u32 ctrl)
 	/* check link status */
 	SET_ADPT_FLAG(0, TASK_LSC_REQ);
 	adpt->link_jiffies = jiffies + ALX_TRY_LINK_TIMEOUT;
-#ifndef ALX_HIB_TIMER_CONFIG
+#ifdef ALX_HIB_TIMER_CONFIG
 	mod_timer(&adpt->alx_timer, jiffies);
 #endif
 	return retval;
@@ -3058,7 +3060,7 @@ static void alx_stop_internal(struct alx_adapter *adpt, u32 ctrl)
 
 	CLI_ADPT_FLAG(0, TASK_LSC_REQ);
 	CLI_ADPT_FLAG(0, TASK_REINIT_REQ);
-#ifndef ALX_HIB_TIMER_CONFIG
+#ifdef ALX_HIB_TIMER_CONFIG
 	del_timer_sync(&adpt->alx_timer);
 #endif
 	if (ctrl & ALX_OPEN_CTRL_RESET_PHY)
@@ -3908,6 +3910,7 @@ static netdev_tx_t alx_start_xmit_frame(struct alx_adapter *adpt,
 		/* no enough descriptor, just stop queue */
 		netif_stop_queue(adpt->netdev);
 		spin_unlock_irqrestore(&adpt->tx_lock, flags);
+		alx_err(adpt, "No TX Desc to send packet\n");
 		return NETDEV_TX_BUSY;
 	}
 

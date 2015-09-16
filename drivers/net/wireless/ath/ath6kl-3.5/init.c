@@ -3262,7 +3262,7 @@ int ath6kl_core_init(struct ath6kl *ar)
 		}
 	}
 
-#ifdef CE_SUPPORT
+#if defined(CE_SUPPORT) || defined(DISABLE_POWER_SAVE)
 	/* set power saving off as default for wlan0
 	 * (target side default is PS on)
 	*/

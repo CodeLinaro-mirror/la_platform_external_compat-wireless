@@ -6432,6 +6432,84 @@ static const struct file_operations fops_printk_fwd = {
 	.llseek = default_llseek,
 };
 
+static char *btc_state[]  = {
+	"BTC_STREAM_UNDEF",
+	"BTC_STREAM_SCO",
+	"BTC_STREAM_A2DP",
+	"BTC_STREAM_SCAN",
+	"BTC_STREAM_ESCO",
+	"BTC_STREAM_HID",
+	"BTC_STREAM_PAN",
+	"BTC_STREAM_RFCOMM",
+	"BTC_STREAM_LE",
+	"BTC_STREAM_SDP",
+	"BTC_STREAM_MAX"
+};
+
+static char *mcc_state[]  = {
+	"MCC_PROFILE_STA50",
+	"MCC_PROFILE_STA20",
+	"MCC_PROFILE_STA80",
+	"MCC_PROFILE_NONE",
+	"MCC_CTS_ENABLE",
+	"MCC_PSPOLL_ENABLE",
+	"MCC_BADAP_CTS_ENABLE",
+	"MCC_BADAP_PSPOLL_ENABLE",
+	"MCC_DUAL_TIME_MASK"
+};
+
+u32 gMccProfile = WMI_MCC_PROFILE_STA50;
+
+static ssize_t ath6kl_btc_status_read(struct file *file,
+					char __user *user_buf,
+					size_t count, loff_t *ppos)
+{
+	struct ath6kl *ar = file->private_data;
+	char *buf;
+	unsigned int len = 0, buf_len = 1500, i;
+	ssize_t ret_cnt;
+
+	buf = kzalloc(buf_len, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	for ( i = 0 ; i < 10 ; i ++ ) {
+		if (ar->btc_status & (1 << i)) {
+			len += snprintf(buf + len, buf_len - len, "%s\n",
+					btc_state[i]);
+		}
+	}
+
+	if (!ar->btc_status) {
+		len += snprintf(buf + len, buf_len - len, "NO BTC_STREAM.\n");
+	}
+
+	i = 0;
+	if (gMccProfile & WMI_MCC_DUAL_TIME_MASK) {
+		len += snprintf(buf + len, buf_len - len, "MCC_PROFILE_STA%d\n",
+					(gMccProfile & 0xf) * 10);
+		i = 4;
+	}
+	for (; i < 8; i++) {
+		if (gMccProfile & (1 << i)) {
+			len += snprintf(buf + len, buf_len - len, "%s\n",
+				mcc_state[i]);
+		}
+	}
+
+	ret_cnt = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+
+	kfree(buf);
+	return ret_cnt;
+}
+
+/* debug fs for BTC */
+static const struct file_operations fops_btc_status = {
+	.read = ath6kl_btc_status_read,
+	.open = ath6kl_debugfs_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
 
 int ath6kl_debug_init(struct ath6kl *ar)
 {
@@ -6689,6 +6767,9 @@ int ath6kl_debug_init(struct ath6kl *ar)
 	debugfs_create_file("printk_fwd", S_IWUSR,
 				ar->debugfs_phy, ar, &fops_printk_fwd);
 	ath6kl_printk_fwd_setup(ar, ATH6KL_PRINTK_FWD_MODE_DUAL);
+
+	debugfs_create_file("btc_mcc_status", S_IWUSR,
+				ar->debugfs_phy, ar, &fops_btc_status);
 
 	return 0;
 }

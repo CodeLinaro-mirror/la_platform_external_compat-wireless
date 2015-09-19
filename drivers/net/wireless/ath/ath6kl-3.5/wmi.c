@@ -1445,8 +1445,7 @@ static int ath6kl_wmi_connect_event_rx(struct wmi *wmi, u8 *datap, int len,
 	/* STA/IBSS mode connection event */
 
 	ath6kl_dbg(ATH6KL_DBG_WMI |
-		ATH6KL_DBG_EXT_INFO1 |
-		ATH6KL_DBG_EXT_DEF,
+		ATH6KL_DBG_EXT_INFO1,
 		   "wmi event connect freq %d bssid %pM listen_intvl %d "
 		   "beacon_intvl %d type %d\n",
 		   le16_to_cpu(ev->u.sta.ch), ev->u.sta.bssid,
@@ -2611,6 +2610,7 @@ int ath6kl_wmi_scanparams_cmd(struct wmi *wmi, u8 if_idx,
 	struct sk_buff *skb;
 	struct wmi_scan_params_cmd *sc;
 	int ret;
+	static int first_scan=1;
 
 	ath6kl_dbg(ATH6KL_DBG_WMI | ATH6KL_DBG_EXT_SCAN,
 		"wmi scanparam idx %d dewell-act %d dewell-pas %d dfs-act %d per-ch-ssid %d\n",
@@ -2635,6 +2635,13 @@ int ath6kl_wmi_scanparams_cmd(struct wmi *wmi, u8 if_idx,
 	sc->scan_ctrl_flags = scan_ctrl_flag;
 	sc->max_dfsch_act_time = cpu_to_le32(max_dfsch_act_time);
 	sc->maxact_scan_per_ssid = cpu_to_le16(maxact_scan_per_ssid);
+	
+	if (first_scan) {
+		first_scan = 0;
+		sc->maxact_chdwell_time = cpu_to_le16(100);
+		sc->pas_chdwell_time = cpu_to_le16(100);
+		sc->maxact_scan_per_ssid = cpu_to_le16(1);
+	}
 
 	ret = ath6kl_wmi_cmd_send(wmi, if_idx, skb, WMI_SET_SCAN_PARAMS_CMDID,
 				  NO_SYNC_WMIFLAG);
@@ -6043,6 +6050,8 @@ int ath6kl_wmi_set_arp_offload_ip_cmd(struct wmi *wmi, u8 if_idx, u8 *ip_addrs)
 	return ret;
 }
 
+extern u32 gMccProfile;
+
 int ath6kl_wmi_set_mcc_profile_cmd(struct wmi *wmi, u32 mcc_profile)
 {
 	struct sk_buff *skb;
@@ -6052,6 +6061,7 @@ int ath6kl_wmi_set_mcc_profile_cmd(struct wmi *wmi, u32 mcc_profile)
 	if (!skb)
 		return -ENOMEM;
 
+	gMccProfile = mcc_profile;
 	cmd = (struct wmi_set_mcc_profile_cmd *)skb->data;
 	cmd->mcc_profile = mcc_profile;
 

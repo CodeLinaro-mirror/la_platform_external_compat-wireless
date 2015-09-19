@@ -631,6 +631,13 @@ int ath6kl_p2p_utils_init_port(struct ath6kl_vif *vif,
 				vif->fw_vif_idx,
 				30);
 	}
+#else
+	if ((fw_vif_idx == 0) &&
+		(vif->nw_type == INFRA_NETWORK)) {
+		ath6kl_wmi_set_bmiss_time(ar->wmi,
+			vif->fw_vif_idx,
+			50);
+	}
 #endif
 
 	return 0;
@@ -1310,7 +1317,7 @@ void ath6kl_p2p_flowctrl_state_update(struct ath6kl *ar,
 		   ac_map[0], ac_map[1], ac_map[2], ac_map[3],
 		   ac_queue_depth[0], ac_queue_depth[1], ac_queue_depth[2],
 		   ac_queue_depth[3], ac_queue_depth[4], ac_queue_depth[5]);
-	if (update_pause_ahead)
+	if (update_pause_ahead && ar->hif_type == ATH6KL_HIF_TYPE_USB)
 		mod_timer(&ar->mcc_pause_ahead_timer,
 			jiffies + msecs_to_jiffies(ATH6KL_MCC_WLAN0_PAUSE_PERIOD));
 

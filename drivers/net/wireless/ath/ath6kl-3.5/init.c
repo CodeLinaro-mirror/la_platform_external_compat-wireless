@@ -56,6 +56,10 @@ unsigned int ath6kl_ce_flags = 1;
 unsigned int ath6kl_regdb = ATH6KL_REG_INTERNAL_REGDB;
 unsigned short reg_domain = NULL_REG_CODE;	/* user prefer */
 unsigned short reg_domain_used = NULL_REG_CODE;	/* final used */
+#ifdef ATH6KL_SDIO_RECOVER
+unsigned int ath6kl_fw_recovery = 1;
+#endif
+unsigned int sdio_drv_str = 0x0;
 
 #ifdef ATH6KL_DIAGNOSTIC
 unsigned int diag_local_test;
@@ -101,6 +105,10 @@ module_param(fwdatapath, charp, 0644);
 module_param(starving_prevention, uint, 0644);
 module_param(ath6kl_regdb, uint, 0644);
 module_param(reg_domain, ushort, 0644);
+#ifdef ATH6KL_SDIO_RECOVER
+module_param(ath6kl_fw_recovery, uint, 0644);
+#endif
+module_param(sdio_drv_str, uint, 0644);
 
 #ifdef CONFIG_ANDROID
 module_param(ath6kl_bt_on, uint, 0644);
@@ -645,7 +653,7 @@ void ath6kl_init_control_info(struct ath6kl_vif *vif)
 	memset(vif->wep_key_list, 0, sizeof(vif->wep_key_list));
 	vif->ch_hint = 0;
 
-	vif->intra_bss = 1;
+	vif->intra_bss = 0;
 
 	memset((u8 *)vif->sta_list, 0,
 	       AP_MAX_NUM_STA * sizeof(struct ath6kl_sta));
@@ -1177,7 +1185,7 @@ void ath6kl_core_cleanup(struct ath6kl *ar)
 }
 
 /* firmware upload */
-#ifdef CE_SUPPORT
+#if defined(CE_SUPPORT) || defined(ATH6KL_SDIO_RECOVER)
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/unistd.h>
@@ -1222,7 +1230,7 @@ static void initKernelEnv(void)
 static int ath6kl_get_fw(struct ath6kl *ar, const char *filename,
 			 u8 **fw, size_t *fw_len)
 {
-#ifdef CE_SUPPORT
+#if defined(CE_SUPPORT) || defined(ATH6KL_SDIO_RECOVER)
 #define MAX_BUFFER_SIZE	128
 	struct file *fp = NULL;
 	int ret;
@@ -1894,7 +1902,7 @@ static int ath6kl_fetch_fw_api2(struct ath6kl *ar)
 			ar->hw.reserved_ram_size = le32_to_cpup(val);
 
 			ath6kl_dbg(ATH6KL_DBG_BOOT,
-				   "found reserved ram size ie 0x%d\n",
+				   "found reserved ram size ie 0x%x\n",
 				   ar->hw.reserved_ram_size);
 			break;
 		case ATH6KL_FW_IE_CAPABILITIES:
@@ -2782,7 +2790,7 @@ static int __ath6kl_init_hw_start(struct ath6kl *ar)
 
 	if (!test_bit(TESTMODE_EPPING, &ar->flag)) {
 		/* Wait for Wmi event to be ready */
-		timeleft = wait_event_interruptible_timeout(ar->event_wq,
+		timeleft = wait_event_timeout(ar->event_wq,
 							    test_bit(WMI_READY,
 							    &ar->flag),
 							    WMI_TIMEOUT);
@@ -2807,7 +2815,7 @@ static int __ath6kl_init_hw_start(struct ath6kl *ar)
 			goto err_htc_stop;
 		}
 
-		if (!timeleft || signal_pending(current)) {
+		if (!timeleft) {
 			ath6kl_err("wmi is not ready or wait "
 				   "was interrupted\n");
 			ret = -EIO;
@@ -2966,6 +2974,23 @@ int ath6kl_get_bootstrap_mode(struct ath6kl *ar)
 	ar->bootstrap_mode = bootstrap;
 
 	return 0;
+}
+
+void ath6kl_sdio_drive_strength(struct ath6kl *ar)
+{
+	u32 reg_val;
+	u32 addr[5] = {0x14050, 0x14054, 0x14058, 0x1405c, 0x14060};
+	int status, i;
+
+	for (i = 0; i < 5; i++) {
+		status = ath6kl_diag_read32(ar,
+			TARG_VTOP(ar->target_type, addr[i]),
+			(u32 *)&reg_val);
+		if (status)
+			break;
+		reg_val = (reg_val & (~0x18)) | ((sdio_drv_str & 0x3) << 3);
+		ath6kl_diag_write32(ar, addr[i], cpu_to_le32(reg_val));		
+	}
 }
 
 int ath6kl_core_init(struct ath6kl *ar)
@@ -3287,6 +3312,10 @@ int ath6kl_core_init(struct ath6kl *ar)
 		ar->conf_flags |= ATH6KL_CONF_SKB_DUP;
 	else
 		ath6kl_info(" skb copy disable\n");
+
+	if (ar->hif_type == ATH6KL_HIF_TYPE_SDIO) {
+		ath6kl_sdio_drive_strength(ar);
+	}
 
 	ath6kl_printk_fwd_reset(ar);
 

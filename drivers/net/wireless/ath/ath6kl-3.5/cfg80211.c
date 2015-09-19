@@ -992,7 +992,7 @@ void ath6kl_switch_parameter_based_on_connection(
 
 	wlan_vif = ath6kl_get_vif_by_index(ar, 0);
 
-	if (wlan_vif != NULL) {
+	if (wlan_vif != NULL && ar->hif_type == ATH6KL_HIF_TYPE_USB) {
 		/* Update HIF queue policy */
 		if (connected_count > 1) {
 			ath6kl_hif_pipe_set_max_queue_number(ar, true);
@@ -1438,8 +1438,7 @@ static int ath6kl_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
 	vif->nw_type = vif->next_mode;
 
 	ath6kl_dbg(ATH6KL_DBG_WLAN_CFG |
-			ATH6KL_DBG_EXT_INFO1 |
-			ATH6KL_DBG_EXT_DEF,
+			ATH6KL_DBG_EXT_INFO1,
 		   "%s: connect called with ssid [%s] authmode %d dot11 auth %d"
 		   " PW crypto %d PW crypto len %d GRP crypto %d"
 		   " GRP crypto len %d channel hint %u\n",
@@ -1981,8 +1980,7 @@ static int ath6kl_cfg80211_change_bss(struct wiphy *wiphy,
 		return -ERESTARTSYS;
 	}
 
-	if (params->ap_isolate >= 0)
-		vif->intra_bss = !params->ap_isolate;
+	vif->intra_bss = 0;
 
 	/* FIXME : support others. */
 
@@ -2302,8 +2300,7 @@ static int _ath6kl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
 
 	ath6kl_dbg(ATH6KL_DBG_WLAN_CFG |
 			ATH6KL_DBG_EXT_SCAN |
-			ATH6KL_DBG_EXT_INFO1 |
-			ATH6KL_DBG_EXT_DEF,
+			ATH6KL_DBG_EXT_INFO1,
 		"%s: vif %d n_chan %d\n",
 		__func__,
 		vif->fw_vif_idx,
@@ -2542,7 +2539,7 @@ void ath6kl_cfg80211_scan_complete_event(struct ath6kl_vif *vif, bool aborted)
 	struct cfg80211_scan_request *scan_request;
 	int i;
 
-	ath6kl_dbg(ATH6KL_DBG_WLAN_CFG | ATH6KL_DBG_EXT_SCAN | ATH6KL_DBG_EXT_DEF,
+	ath6kl_dbg(ATH6KL_DBG_WLAN_CFG | ATH6KL_DBG_EXT_SCAN,
 		"%s: status%s\n", __func__,
 		aborted ? " aborted" : " complete");
 
@@ -4837,7 +4834,7 @@ static int ath6kl_set_channel(struct wiphy *wiphy, struct net_device *dev,
 #endif
 
 static int ath6kl_set_ap_probe_resp_ies(struct ath6kl_vif *vif,
-					const u8 *ies, size_t ies_len)
+					const u8 *ies, size_t ies_len, u8 passwordless_go)
 {
 	struct ath6kl *ar = vif->ar;
 	const u8 *pos;
@@ -4864,8 +4861,16 @@ static int ath6kl_set_ap_probe_resp_ies(struct ath6kl_vif *vif,
 			if ((!ath6kl_is_p2p_ie(pos)) &&
 			    (!ath6kl_is_wfd_ie(pos)) &&
 			    (!ath6kl_is_exteneded_cap_ie(pos))) {
-				memcpy(buf + len, pos, 2 + pos[1]);
-				len += 2 + pos[1];
+				if (passwordless_go) {
+					/* Filter wps_ie once it's a passwordless GO */
+					if (!ath6kl_is_wps_ie(pos)) {
+						memcpy(buf + len, pos, 2 + pos[1]);
+						len += 2 + pos[1];
+					}
+				} else {
+					memcpy(buf + len, pos, 2 + pos[1]);
+					len += 2 + pos[1];
+				}
 			}
 			pos += 2 + pos[1];
 		}
@@ -4879,7 +4884,8 @@ static int ath6kl_set_ap_probe_resp_ies(struct ath6kl_vif *vif,
 
 static int ath6kl_set_ap_beacon_ies(struct ath6kl_vif *vif,
 					const u8 *ies,
-					size_t ies_len)
+					size_t ies_len,
+					u8 passwordless_go)
 {
 	const u8 *pos;
 	u8 *buf = NULL;
@@ -4902,15 +4908,24 @@ static int ath6kl_set_ap_beacon_ies(struct ath6kl_vif *vif,
 			 * IOT issue.
 			 */
 			if (!ath6kl_is_exteneded_cap_ie(pos)) {
-				memcpy(buf + len, pos, 2 + pos[1]);
-				len += 2 + pos[1];
+				if (passwordless_go) {
+					/* Filter wps_ie and p2p_ie once it's a passwordless GO */
+					if ((!ath6kl_is_wps_ie(pos)) &&
+					    (!ath6kl_is_p2p_ie(pos))) {
+						memcpy(buf + len, pos, 2 + pos[1]);
+						len += 2 + pos[1];
+					}
+				} else {
+					memcpy(buf + len, pos, 2 + pos[1]);
+					len += 2 + pos[1];
+				}
 			}
 			pos += 2 + pos[1];
 		}
 	}
 
 	/* Append NoA IE if need */
-	if (buf)
+	if (buf && !passwordless_go)
 		ath6kl_p2p_ps_user_app_ie(vif->p2p_ps_info_ctx,
 					  WMI_FRAME_BEACON,
 					  &buf,
@@ -4928,7 +4943,8 @@ static int ath6kl_set_ap_beacon_ies(struct ath6kl_vif *vif,
 
 static int ath6kl_set_ap_assoc_resp_ies(struct ath6kl_vif *vif,
 					const u8 *ies,
-					size_t ies_len)
+					size_t ies_len,
+					u8 passwordless_go)
 {
 	const u8 *pos;
 	u8 *buf = NULL;
@@ -4951,8 +4967,17 @@ static int ath6kl_set_ap_assoc_resp_ies(struct ath6kl_vif *vif,
 			 * IOT issue.
 			 */
 			if (!ath6kl_is_exteneded_cap_ie(pos)) {
-				memcpy(buf + len, pos, 2 + pos[1]);
-				len += 2 + pos[1];
+				if (passwordless_go) {
+					/* Filter wps_ie and p2p_ie once it's a passwordless GO */
+					if ((!ath6kl_is_wps_ie(pos)) &&
+					    (!ath6kl_is_p2p_ie(pos))) {
+						memcpy(buf + len, pos, 2 + pos[1]);
+						len += 2 + pos[1];
+					}
+				} else {
+					memcpy(buf + len, pos, 2 + pos[1]);
+					len += 2 + pos[1];
+				}
 			}
 			pos += 2 + pos[1];
 		}
@@ -5226,6 +5251,7 @@ static int ath6kl_ap_beacon(struct wiphy *wiphy, struct net_device *dev,
 	int res;
 	int i;
 	u16 chan;
+	u8 passwordless_go = 1;
 
 	ath6kl_dbg(ATH6KL_DBG_WLAN_CFG, "%s: add=%d\n", __func__, add);
 
@@ -5242,10 +5268,16 @@ static int ath6kl_ap_beacon(struct wiphy *wiphy, struct net_device *dev,
 		return -EOPNOTSUPP;
 	}
 
+	if (info->crypto.cipher_group != WLAN_CIPHER_SUITE_CCMP && vif->wdev.iftype == NL80211_IFTYPE_P2P_GO && add) {
+		passwordless_go = 1;
+		ath6kl_wmi_disable_11b_rates_cmd(ar->wmi, vif->fw_vif_idx, 0);
+	}
+
 	if (info->beacon_ies) {
 		res = ath6kl_set_ap_beacon_ies(vif,
 					       info->beacon_ies,
-					       info->beacon_ies_len);
+					       info->beacon_ies_len,
+					       passwordless_go);
 		if (res) {
 			up(&ar->sem);
 			return res;
@@ -5263,7 +5295,8 @@ static int ath6kl_ap_beacon(struct wiphy *wiphy, struct net_device *dev,
 	if (info->proberesp_ies) {
 		res = ath6kl_set_ap_probe_resp_ies(vif,
 						   info->proberesp_ies,
-						   info->proberesp_ies_len);
+						   info->proberesp_ies_len,
+						   passwordless_go);
 		if (res) {
 			up(&ar->sem);
 			return res;
@@ -5272,7 +5305,8 @@ static int ath6kl_ap_beacon(struct wiphy *wiphy, struct net_device *dev,
 	if (info->assocresp_ies) {
 		res = ath6kl_set_ap_assoc_resp_ies(vif,
 						   info->assocresp_ies,
-						   info->assocresp_ies_len);
+						   info->assocresp_ies_len,
+						   passwordless_go);
 		if (res) {
 			up(&ar->sem);
 			return res;
@@ -7031,6 +7065,7 @@ struct ath6kl *ath6kl_core_alloc(struct device *dev)
 		ar->roam_mode = ATH6KL_MODULEROAM_DISABLE;
 	}
 
+	ar->btc_status = 0;
 	return ar;
 }
 

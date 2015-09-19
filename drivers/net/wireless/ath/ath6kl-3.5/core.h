@@ -58,7 +58,7 @@
 #define TO_STR(symbol) MAKE_STR(symbol)
 
 /* The script (used for release builds) modifies the following line. */
-#define __BUILD_VERSION_ (3.5.0.562)
+#define __BUILD_VERSION_ (3.5.0.592)
 
 #define DRV_VERSION		TO_STR(__BUILD_VERSION_)
 
@@ -1941,6 +1941,7 @@ struct ath6kl {
 	u32 last_wow_fliter;
 	u32 mcc_cc_state[10];
 	u32 mcc_p2p_dwell[10];
+	u32 btc_status;
 };
 
 static inline void *ath6kl_priv(struct net_device *dev)

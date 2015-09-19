@@ -162,6 +162,7 @@ u8 fe_antenna_type(struct ath6kl *ar)
 {
 	/* default setting for McK */
 	u8 fe_antenna = WMI_BTCOEX_FE_ANT_DUAL_SH_BT_LOW_ISO;
+	ar->btc_status = 0;
 
 	if (ar->version.target_ver == AR6004_HW_3_0_VERSION) {
 #ifdef CONFIG_ANDROID
@@ -334,6 +335,16 @@ int ath6kl_wmi_send_btcoex_cmd(struct ath6kl *ar,
 	wmi_cmd = ath6kl_get_wmi_cmd(nl_cmd);
 	if (wmi_cmd == 0)
 		return -ENOMEM;
+	if (wmi_cmd == WMI_SET_BTCOEX_BT_OPERATING_STATUS_CMDID) {
+		u32 profile, on;
+		profile = *(u32 *)buf;
+		on = *(((u32 *)buf) + 1);
+
+		if(on == 2)
+			ar->btc_status &= ~(1<<profile);
+		else
+			ar->btc_status |= 1<<profile;
+	}
 
 	skb = ath6kl_wmi_btcoex_get_new_buf(len);
 	if (!skb)

@@ -2145,6 +2145,7 @@ int ath6kl_htc_rxmsg_pending_handler(struct htc_target *target,
 	int num_look_ahead = 1;
 	enum htc_endpoint_id id;
 	int n_fetched = 0;
+	bool pktq_initiated = true;
 
 	*num_pkts = 0;
 
@@ -2167,6 +2168,7 @@ int ath6kl_htc_rxmsg_pending_handler(struct htc_target *target,
 			ath6kl_err("MsgPend, invalid endpoint in look-ahead: %d\n",
 				   id);
 			status = -ENOMEM;
+			pktq_initiated= false;
 			break;
 		}
 
@@ -2217,7 +2219,7 @@ int ath6kl_htc_rxmsg_pending_handler(struct htc_target *target,
 		target->chk_irq_status_cnt = 1;
 	}
 
-	if (status) {
+	if (status && pktq_initiated) {
 		ath6kl_err("failed to get pending recv messages: %d\n",
 			   status);
 

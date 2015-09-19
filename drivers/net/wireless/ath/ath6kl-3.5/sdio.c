@@ -43,6 +43,7 @@
 
 #ifdef ATH6KL_SDIO_RECOVER
 atomic_t ath6kl_recover_state;
+extern unsigned int ath6kl_fw_recovery;
 #endif
 
 
@@ -1286,9 +1287,15 @@ static void ath6kl_sdio_set_max_queue_number(struct ath6kl *ar, bool limitEnable
 #ifdef ATH6KL_SDIO_RECOVER
 int ath6kl_sdio_sw_recover(struct ath6kl *ar)
 {
-        struct ath6kl_vif *vif;
-        struct net_device *netdev;
+	struct ath6kl_vif *vif;
+	struct net_device *netdev;
 	char *sw_recover_event[] = { "FW_CRASH=1", NULL };
+
+	if(!ath6kl_fw_recovery) {
+		ath6kl_info("%s: fw_recovery is disabled\n", __func__);
+		return 0;
+	}
+
 #if 0
         if (ath6kl_driver_unloaded)
                 return 0;
@@ -1401,17 +1408,12 @@ static SIMPLE_DEV_PM_OPS(ath6kl_sdio_pm_ops, ath6kl_sdio_pm_suspend,
 #endif /* CONFIG_PM_SLEEP */
 
 #ifdef ATH6KL_SDIO_RECOVER
-static void ath6kl_recover_war_work(struct work_struct *work)
+static void ath6kl_reset_war_work(struct work_struct *work)
 {
-	int status = 0;
-	char buf[32];
-	size_t len;
+	struct ath6kl *ar;
 
-	len = snprintf(buf, sizeof(buf), "%s", "bt_restart");
-	status = _readwrite_file("/tmp/bt_restart", NULL,
-				buf, len, (O_WRONLY | O_CREAT));
-	if (status < 0)
-		ath6kl_info("write failed with status code 0x%x\n", status);
+	ar = container_of(work, struct ath6kl, reset_cover_war_work);
+	ath6kl_hif_sw_recover(ar);
 }
 #endif
 
@@ -1484,12 +1486,10 @@ static int ath6kl_sdio_probe(struct sdio_func *func,
 	}
 
 #ifdef ATH6KL_SDIO_RECOVER
-#if 0
         /* Initialize the worker */
         INIT_WORK(&ar->reset_cover_war_work,
-                        ath6kl_recover_war_work);
+                        ath6kl_reset_war_work);
 
-#endif
         /* Initialize the state */
         atomic_set(&ath6kl_recover_state,
                         ATH6KL_RECOVER_STATE_INITIALIZED);

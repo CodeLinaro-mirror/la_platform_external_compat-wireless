@@ -455,11 +455,7 @@ int ath6kl_control_tx(void *devt, struct sk_buff *skb,
 			if (!test_and_set_bit(RECOVER_IN_PROCESS, &ar->flag)) {
 				ath6kl_info("%s schedule recover\n", __func__);
 				ath6kl_check_apmode(ar);
-#if defined(ATH6KL_SDIO_RECOVER)
-				ath6kl_hif_sw_recover(ar);
-#else
 				schedule_work(&ar->reset_cover_war_work);
-#endif
 			}
 			del_timer(&fw_ping_timer);
 			fw_ping_count = 0;

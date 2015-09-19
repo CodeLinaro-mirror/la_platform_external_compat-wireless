@@ -1715,12 +1715,12 @@ enum wmi_bi_ftype {
 	PROBEREQ_FTYPE,
 };
 
-#define DEF_SCAN_FOR_ROAM_INTVL			2
-#define WMI_ROAM_LRSSI_SCAN_PERIOD		(15 * 1000)	/* secs */
-#define WMI_ROAM_LRSSI_ROAM_THRESHOLD	20	/* rssi */
+#define DEF_SCAN_FOR_ROAM_INTVL			0
+#define WMI_ROAM_LRSSI_SCAN_PERIOD		(60 * 1000)	/* secs */
+#define WMI_ROAM_LRSSI_ROAM_THRESHOLD	28	/* rssi */
 #define WMI_ROAM_LRSSI_SCAN_THRESHOLD (WMI_ROAM_LRSSI_ROAM_THRESHOLD + \
 	DEF_SCAN_FOR_ROAM_INTVL)	/* rssi */
-#define WMI_ROAM_LRSSI_ROAM_FLOOR		60	/* rssi */
+#define WMI_ROAM_LRSSI_ROAM_FLOOR		90	/* rssi */
 
 enum wmi_roam_ctrl {
 	WMI_FORCE_ROAM = 1,
@@ -3246,6 +3246,7 @@ enum WMI_MCC_PROFILE {
 	WMI_MCC_CTS_ENABLE     = BIT(4),
 	WMI_MCC_PSPOLL_ENABLE  = BIT(5),
 	WMI_MCC_DUAL_TIME_MASK = BIT(8),
+	WMI_MCC_P2P_CTS        = BIT(9),
 };
 
 struct wmi_set_mcc_profile_cmd {

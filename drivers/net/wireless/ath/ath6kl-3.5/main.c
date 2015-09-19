@@ -640,7 +640,7 @@ static void bss_proc_post_flush(struct bss_post_proc *post_proc, bool force)
 
 	if (bss_cnt == 0 ||
 		bss_cnt == aging_cnt) {
-		ath6kl_dbg(ATH6KL_DBG_EXT_DEF,
+		ath6kl_dbg(ATH6KL_DBG_EXT_BSS_PROC,
 		   "bss_proc flush %s, %d/%d\n",
 		   (force ? "force" : "aging"),
 		   aging_cnt,
@@ -1335,7 +1335,7 @@ int ath6kl_diag_write32(struct ath6kl *ar, u32 address, __le32 value)
 	ret = ath6kl_hif_diag_write32(ar, address, value);
 
 	if (ret) {
-		ath6kl_err("failed to write 0x%x during diagnose window to 0x%d\n",
+		ath6kl_err("failed to write 0x%x during diagnose window to 0x%x\n",
 			   address, value);
 		return ret;
 	}
@@ -1775,8 +1775,6 @@ void ath6kl_ready_event(void *devt, u8 *datap, u32 sw_ver, u32 abi_ver)
 
 	memcpy(ar->mac_addr, datap, ETH_ALEN);
 
-	ath6kl_info("MAC ADDRESS %pM\n", ar->mac_addr);
-
 	ar->version.wlan_ver = sw_ver;
 	ar->version.abi_ver = abi_ver;
 
@@ -1825,8 +1823,7 @@ void ath6kl_scan_complete_evt(struct ath6kl_vif *vif, int status)
 
 	ath6kl_dbg(ATH6KL_DBG_WLAN_CFG |
 		   ATH6KL_DBG_EXT_INFO1 |
-		   ATH6KL_DBG_EXT_SCAN |
-		   ATH6KL_DBG_EXT_DEF,
+		   ATH6KL_DBG_EXT_SCAN,
 		"vif %d, scan complete: %d\n",
 		vif->fw_vif_idx,
 		status);

@@ -3381,8 +3381,8 @@ static int alx_resume(struct device *dev)
 
 
 	netif_device_attach(netdev);
-	/* Hold the wake lock for 500 msec to ensure any traffic*/
-	pm_wakeup_event(dev, 500);
+	/* Hold the wake lock for 5sec to ensure any traffic*/
+	pm_wakeup_event(dev, 5000);
 	return 0;
 }
 #endif

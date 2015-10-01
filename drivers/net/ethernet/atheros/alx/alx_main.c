@@ -1147,6 +1147,7 @@ static bool alx_handle_tx_irq(struct alx_msix_param *msix,
 	u16 consume_data;
 #ifdef MDM_PLATFORM
 	struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
+	int num_tx_comp = 0;
 #endif
 
 	alx_mem_r16(hw, txque->consume_reg, &consume_data);
@@ -1174,17 +1175,19 @@ static bool alx_handle_tx_irq(struct alx_msix_param *msix,
 
 #ifdef MDM_PLATFORM
 		/* Update TX Completetion Recieved */
-		spin_lock_bh(&alx_ipa->rm_ipa_lock);
-		alx_ipa->alx_tx_completion;
-		spin_unlock_bh(&alx_ipa->rm_ipa_lock);
+		num_tx_comp++;
 #endif
 	}
 
 #ifdef MDM_PLATFORM
 	/* Release Wakelock if all TX Completion is done */
 	spin_lock_bh(&alx_ipa->rm_ipa_lock);
-	if (!alx_ipa->ipa_rx_completion && !alx_ipa->alx_tx_completion)
-		alx_ipa->alx_tx_completion;
+	alx_ipa->alx_tx_completion -= num_tx_comp;
+	if (!alx_ipa->ipa_rx_completion && !alx_ipa->alx_tx_completion &&
+		(alx_ipa->acquire_wake_src == true)) {
+		__pm_relax(&alx_ipa->rm_ipa_wait);
+		alx_ipa->acquire_wake_src = false;
+	}
 	spin_unlock_bh(&alx_ipa->rm_ipa_lock);
 #endif
 
@@ -4042,8 +4045,11 @@ static netdev_tx_t alx_start_xmit_frame(struct alx_adapter *adpt,
 #ifdef MDM_PLATFORM
 	/* Hold on to the wake lock for TX Completion Event */
 	spin_lock_bh(&alx_ipa->rm_ipa_lock);
-	if (!alx_ipa->ipa_rx_completion && !alx_ipa->alx_tx_completion)
-		alx_ipa->alx_tx_completion;
+	if (alx_ipa->acquire_wake_src == false) {
+		 __pm_stay_awake(&alx_ipa->rm_ipa_wait);
+		alx_ipa->acquire_wake_src = true;
+	}
+	alx_ipa->alx_tx_completion++;
 	spin_unlock_bh(&alx_ipa->rm_ipa_lock);
 #endif
 
@@ -4222,6 +4228,7 @@ static void alx_ipa_tx_dp_cb(void *priv, enum ipa_dp_evt_type evt,
 		spin_lock_bh(&alx_ipa->rm_ipa_lock);
 		alx_ipa->ipa_rx_completion--;
 		if (!alx_ipa->ipa_rx_completion &&
+			!alx_ipa->alx_tx_completion &&
 			(alx_ipa->acquire_wake_src == true)) {
 			__pm_relax(&alx_ipa->rm_ipa_wait);
 			alx_ipa->acquire_wake_src = false;

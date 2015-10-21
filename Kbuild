@@ -73,5 +73,4 @@ ccflags-y += -DCONFIG_ATH6KL_REGDOMAIN
 ccflags-y += -D__CHECK_ENDIAN__
 endif
 
-ccflags-y += -DDISABLE_POWER_SAVE
 ccflags-y += -DATH6KL_SDIO_RECOVER

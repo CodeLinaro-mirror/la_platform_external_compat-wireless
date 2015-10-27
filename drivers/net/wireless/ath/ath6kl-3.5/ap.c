@@ -1243,8 +1243,7 @@ void ath6kl_ap_rc_init(struct ath6kl_vif *vif)
 {
 	struct ap_rc_info *ap_rc = &vif->ap_rc_info_ctx;
 
-	/* For testing only */
-	ap_rc->mode = AP_RC_MODE_2GALL;
+	ap_rc->mode = AP_RC_MODE_DISABLE;
 	ap_rc->chan = 0;
 	ap_rc->chan_fixed = 0;
 

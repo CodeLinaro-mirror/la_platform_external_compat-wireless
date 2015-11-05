@@ -3274,6 +3274,14 @@ static int alx_shutdown_internal(struct pci_dev *pdev, bool *wakeup)
 	} else {
 		speed = ALX_LINK_SPEED_10_HALF;
 		link_up = false;
+		/* When link is  disabled and PHY/MAC not programmed at all
+		* Due to a suspected bug in HW, we dont get PHY UP interrupt
+		* As a solution, program the MAC/PHY with 10Mbps HD link speed
+		* even the there is no LINK Detected */
+		retval = hw->cbs.setup_phy_link(hw, speed, true,
+				!hw->disable_fc_autoneg);
+		if (retval)
+			return retval;
 	}
 	hw->link_speed = speed;
 	hw->link_up = link_up;

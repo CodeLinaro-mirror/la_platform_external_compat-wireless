@@ -37,8 +37,10 @@
  * Define GPIO number for WoW in your platform other than zero
  * Wake lock will be called when GPIO asserted.
  */
-#ifdef CONFIG_ANDROID
+#if defined(CONFIG_ANDROID) && !defined(ATH6KL_DISABLE_WOW_IRQ)
 #define PLAT_WOW_GPIO_PIN                  26
+#else
+#define PLAT_WOW_GPIO_PIN                  0
 #endif
 
 #ifdef ATH6KL_SDIO_RECOVER

@@ -74,3 +74,4 @@ ccflags-y += -D__CHECK_ENDIAN__
 endif
 
 ccflags-y += -DATH6KL_SDIO_RECOVER
+ccflags-y += -DATH6KL_DISABLE_WOW_IRQ

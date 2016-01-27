@@ -22,9 +22,19 @@ wlan-y += drivers/net/wireless/ath/ath6kl-3.5/ap.o
 wlan-y += drivers/net/wireless/ath/ath6kl-3.5/msm.o
 wlan-y += drivers/net/wireless/ath/ath6kl-3.5/htc.o
 wlan-y += drivers/net/wireless/ath/ath6kl-3.5/hif.o
-wlan-y += drivers/net/wireless/ath/ath6kl-3.5/sdio.o
+
 wlan-y += drivers/net/wireless/ath/ath6kl-3.5/reg.o
 wlan-y += drivers/net/wireless/ath/ath6kl-3.5/regdb.o
+
+ifeq ($(BUILD_ATH6KL_VER_35_USB),1)
+wlan-y += drivers/net/wireless/ath/ath6kl-3.5/htc_pipe.o
+wlan-y += drivers/net/wireless/ath/ath6kl-3.5/usb.o
+endif
+
+ifeq ($(BUILD_ATH6KL_VER_35_SDIO),1)
+wlan-y += drivers/net/wireless/ath/ath6kl-3.5/sdio.o
+endif
+
 endif
 
 ifeq ($(HAVE_CFG80211), 1)

@@ -3345,8 +3345,8 @@ static int alx_suspend(struct device *dev)
 
 	if (alx_ipa_rm_try_release(adpt))
 		pr_err("%s -- ODU PROD Release unsuccessful \n",__func__);
-	else
-		adpt->palx_ipa->ipa_prod_rm_state == ALX_IPA_RM_RELEASED;
+        else
+		adpt->palx_ipa->ipa_prod_rm_state = ALX_IPA_RM_RELEASED;
 
 	if (wakeup) {
 		pci_prepare_to_sleep(pdev);

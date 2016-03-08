@@ -42,6 +42,7 @@
 #include <asm/byteorder.h>
 #ifdef MDM_PLATFORM
 #include <linux/ipa.h>
+#include <linux/ipa_odu_bridge.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0))
 #include <linux/msm_pcie.h>
 #else

@@ -69,12 +69,15 @@ MODULE_LICENSE("Dual BSD/GPL");
 static int alx_open_internal(struct alx_adapter *adpt, u32 ctrl);
 static void alx_stop_internal(struct alx_adapter *adpt, u32 ctrl);
 static void alx_init_ring_ptrs(struct alx_adapter *adpt);
+
+#ifdef MDM_PLATFORM
 static int alx_ipa_rm_try_release(struct alx_adapter *adpt);
 static int alx_ipa_setup_rm(struct alx_adapter *adpt);
 
-#ifdef MDM_PLATFORM
 /* Global CTX PTR which can be used for debugging */
 static struct alx_adapter *galx_adapter_ptr = NULL;
+static  s8 debugfs_ipa_enable = 1;
+const mode_t read_write_mode = S_IRUSR | S_IRGRP | S_IROTH | S_IWUSR | S_IWGRP;
 
 static inline char *alx_ipa_rm_state_to_str(enum alx_ipa_rm_state state)
 {
@@ -602,7 +605,6 @@ static void alx_receive_skb_ipa(struct alx_adapter *adpt,
 	bool is_pkt_ipv4 = alx_ipa_is_ipv4_pkt(proto);
 	bool is_pkt_ipv6 = alx_ipa_is_ipv6_pkt(proto);
 	struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
-
 	skb_reset_mac_header(skb);
 	if (vlan_flag) {
 		u16 vlan;
@@ -3346,7 +3348,7 @@ static int alx_suspend(struct device *dev)
 	if (alx_ipa_rm_try_release(adpt))
 		pr_err("%s -- ODU PROD Release unsuccessful \n",__func__);
 	else
-		adpt->palx_ipa->ipa_prod_rm_state == ALX_IPA_RM_RELEASED;
+		adpt->palx_ipa->ipa_prod_rm_state = ALX_IPA_RM_RELEASED;
 
 	if (wakeup) {
 		pci_prepare_to_sleep(pdev);
@@ -4285,9 +4287,10 @@ static void alx_ipa_tx_dl(void *priv, struct sk_buff *skb)
 	}
 }
 
-static void alx_ipa_ready_cb(struct alx_adapter *adpt)
+static void alx_ipa_ready_cb(void *padpt)
 {
-	struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
+        struct alx_adapter *adpt = (struct alx_adapter *)padpt;
+        struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
         struct odu_bridge_params *params_ptr, params;
 	int retval = 0;
 	struct alx_hw *hw = &adpt->hw;
@@ -4499,7 +4502,30 @@ static ssize_t alx_ipa_debugfs_disable_ipa(struct file *file,
 		/* Request for IPA Resources */
 		alx_ipa_rm_request(galx_adapter_ptr);
 	}
+        debugfs_ipa_enable = value;
 	return count;
+}
+
+static ssize_t alx_ipa_debugfs_disable_ipa_read(struct file *file,
+                char __user *user_buf, size_t count, loff_t *ppos)
+{
+	struct alx_adapter *adpt = file->private_data;
+	ssize_t ret_cnt;
+        char* buf = NULL;
+        unsigned int buf_len = 100;
+
+	if (unlikely(!adpt)) {
+		pr_err(" %s NULL Pointer \n",__func__);
+		return -EINVAL;
+	}
+	if (!CHK_ADPT_FLAG(2, DEBUGFS_INIT))
+		return 0;
+
+        buf = kzalloc(buf_len, GFP_KERNEL);
+        if ( !buf )
+           return -ENOMEM;
+        ret_cnt = scnprintf(buf, buf_len, "%d\n",debugfs_ipa_enable);
+        return simple_read_from_buffer(user_buf, count, ppos, buf, ret_cnt);
 }
 
 static const struct file_operations fops_ipa_stats = {
@@ -4511,6 +4537,7 @@ static const struct file_operations fops_ipa_stats = {
 
 static const struct file_operations fops_ipa_disable = {
                 .write = alx_ipa_debugfs_disable_ipa,
+                .read = alx_ipa_debugfs_disable_ipa_read,
                 .open = simple_open,
                 .owner = THIS_MODULE,
                 .llseek = default_llseek,
@@ -4524,7 +4551,7 @@ static int alx_debugfs_init(struct alx_adapter *adpt)
 
 	debugfs_create_file("stats", S_IRUSR, adpt->palx_ipa->debugfs_dir,
 					adpt, &fops_ipa_stats);
-	debugfs_create_file("ipa_enable", S_IWUSR, adpt->palx_ipa->debugfs_dir,
+	debugfs_create_file("ipa_enable", read_write_mode, adpt->palx_ipa->debugfs_dir,
 					adpt, &fops_ipa_disable);
 
 	return 0;

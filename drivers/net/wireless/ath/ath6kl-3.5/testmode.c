@@ -77,6 +77,33 @@ void ath6kl_tm_rx_report_event(struct ath6kl *ar, void *buf, size_t buf_len)
 
 void ath6kl_tm_rx_event(struct ath6kl *ar, void *buf, size_t buf_len)
 {
+#ifdef CONFIG_LINUX_QCMBR
+    if(ar->testmode == 2)
+    {
+        qcmbr_queue_t *qcmbr_buf = NULL;
+
+        printk(KERN_DEBUG "%s\n", __func__);
+
+        if(buf_len == 0) {
+            printk(KERN_ERR "buf_len 0 at %s\n", __func__);
+            return;
+        }
+
+        qcmbr_buf = kmalloc(sizeof(qcmbr_queue_t), GFP_KERNEL);
+        if(qcmbr_buf != NULL) {
+            qcmbr_buf->length = buf_len;
+            memcpy(qcmbr_buf->utf_buf, buf, buf_len);
+            spin_lock_bh(&ar->qcmbr_queue_lock);
+            list_add_tail(&(qcmbr_buf->list), &ar->qcmbr_queue_head);
+            spin_unlock_bh(&ar->qcmbr_queue_lock);
+        }else {
+            printk(KERN_ERR " allocate failed %s\n", __func__);
+        }
+        return;
+    }
+    else
+#endif
+    {
 	struct sk_buff *skb;
 
 	if (!buf || buf_len == 0) {
@@ -101,7 +128,7 @@ nla_put_failure:
 	kfree_skb(skb);
 	printk(KERN_ERR "nla_put failed on testmode rx skb!\n");
 #endif
-
+    }
 }
 
 #ifdef ATH6KL_SUPPORT_WLAN_HB

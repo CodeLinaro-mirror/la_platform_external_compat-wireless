@@ -2384,8 +2384,8 @@ int ath6kl_wmi_cmd_send(struct wmi *wmi, u8 if_idx, struct sk_buff *skb,
 		return -EINVAL;
 	}
 #endif
-	ath6kl_dbg(ATH6KL_DBG_WMI, "wmi tx id %d len %d flag %d\n",
-		   cmd_id, skb->len, sync_flag);
+	ath6kl_dbg(ATH6KL_DBG_WMI, "wmi tx id %d len %d flag %d index %d\n",
+		   cmd_id, skb->len, sync_flag, if_idx);
 	ath6kl_dbg_dump(ATH6KL_DBG_WMI_DUMP, NULL, "wmi tx ",
 			skb->data, skb->len);
 
@@ -6293,4 +6293,25 @@ int ath6kl_wmi_set_dtim_ext(struct wmi *wmi, u8 dtim_ext)
 
 	return ath6kl_wmi_cmd_send(wmi, 0, skb, WMI_SET_DTIM_EXT_CMDID,
 				NO_SYNC_WMIFLAG);
+}
+
+int ath6kl_wmi_mcastrate_cmd(struct wmi *wmi, u8 if_idx, u16 bitrate)
+{
+	struct sk_buff *skb;
+	struct wmi_set_mcastrate_cmd *cmd;
+	int ret;
+
+	ath6kl_dbg(ATH6KL_DBG_WMI, "mcastrate = %d\n", bitrate);
+
+	skb = ath6kl_wmi_get_new_buf(sizeof(*cmd));
+	if (!skb)
+		return -ENOMEM;
+
+	cmd = (struct wmi_set_mcastrate_cmd *) skb->data;
+	cmd->bitrate = bitrate;
+
+	ret = ath6kl_wmi_cmd_send(wmi, if_idx, skb, WMI_SET_MCASTRATE_CMDID,
+				  NO_SYNC_WMIFLAG);
+
+	return ret;
 }

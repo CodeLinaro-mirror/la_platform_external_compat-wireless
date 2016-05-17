@@ -2401,6 +2401,26 @@ struct ath6kl_vif *ath6kl_vif_first(struct ath6kl *ar)
 	return vif;
 }
 
+struct ath6kl_vif *ath6kl_vif_search(struct ath6kl *ar, char* interface)
+{
+	struct ath6kl_vif *vif = NULL;
+
+	spin_lock_bh(&ar->list_lock);
+	if (list_empty(&ar->vif_list)) {
+		spin_unlock_bh(&ar->list_lock);
+		return NULL;
+	}
+
+	list_for_each_entry(vif, &ar->vif_list, list) {
+		if (strcmp(vif->ndev->name, interface) == 0)
+			goto done;
+	}
+
+done:
+	spin_unlock_bh(&ar->list_lock);
+	return vif;
+}
+
 static int ath6kl_open(struct net_device *dev)
 {
 	struct ath6kl_vif *vif = netdev_priv(dev);
@@ -3061,6 +3081,114 @@ static int ath6kl_ioctl_get_if_freq(struct net_device *dev,
 	}
 }
 
+#ifdef CONFIG_LINUX_QCMBR
+
+struct tcmd_tlv_response_head{
+	u32 perserve;
+	u32 act;
+	u16 len;
+};
+
+struct tcmd_qcmbr_header{
+	u16 lenth;
+	u16 mck_patten;
+	u32 act;
+	u32 reserved;
+};
+static int ath6kl_qcmbr_unified_ioctl(struct ath6kl_vif *vif,
+				qcmbr_data_t * pqcmbr_data)
+{
+	int ret=0;
+	struct ath6kl *ar = vif->ar;
+	qcmbr_queue_t *qcmbr_buf = NULL;
+	struct tcmd_tlv_response_head *tcmdtlvrxhead;
+	struct tcmd_qcmbr_header *tcmdqcmbrhead;
+
+	switch (pqcmbr_data->cmd) {
+		case ATH_XIOCTL_UNIFIED_UTF_CMD:
+		{
+			pqcmbr_data->copy_to_user = 0;
+			if(pqcmbr_data->length) {
+				ret = ath6kl_wmi_test_cmd(vif->ar->wmi, pqcmbr_data->buf, pqcmbr_data->length);
+			}
+		}
+		break;
+
+		case ATH_XIOCTL_UNIFIED_UTF_RSP:
+		{
+            if (!list_empty(&ar->qcmbr_queue_head)) {
+				pqcmbr_data->copy_to_user = 1;
+				spin_lock_bh(&ar->qcmbr_queue_lock);
+				qcmbr_buf = list_first_entry(&ar->qcmbr_queue_head,
+								qcmbr_queue_t, list);
+				list_del(&qcmbr_buf->list);
+				spin_unlock_bh(&ar->qcmbr_queue_lock);
+				ret = 0;
+			} else {
+				ret = -1;
+			}
+
+			if (!ret) {
+				memcpy(pqcmbr_data->buf, qcmbr_buf->utf_buf,
+					qcmbr_buf->length);
+				tcmdtlvrxhead = (struct tcmd_tlv_response_head *)qcmbr_buf->utf_buf;
+				tcmdqcmbrhead = (struct tcmd_qcmbr_header *)pqcmbr_data->buf;
+
+				pqcmbr_data->length = tcmdtlvrxhead->len;
+				tcmdqcmbrhead->lenth =  tcmdtlvrxhead->len;
+				tcmdqcmbrhead->mck_patten = 0x6004;
+				kfree(qcmbr_buf);
+			} else {
+				ret = -EAGAIN;
+			}
+		}
+		break;
+	}
+	return ret;
+}
+
+static int ath6kl_ioctl_tcmd(struct net_device *dev,
+				struct ifreq *rq,
+				int cmd)
+{
+	int ret = true;
+
+	struct ath6kl_vif *vif = netdev_priv(dev);
+	qcmbr_data_t *qcmbr_data;
+
+    if (vif == NULL || vif->ar == NULL || vif->ar->testmode == 0) {
+            ret = -EPERM;
+            printk(KERN_DEBUG "TX99 is not permitted in testmode = 0.\n");
+            return ret;
+    }
+
+	qcmbr_data = kmalloc(sizeof(qcmbr_data_t), GFP_KERNEL);
+	if(qcmbr_data == NULL) {
+		ret = -ENOMEM;
+		goto exit;
+	}
+
+	memset(qcmbr_data, 0, sizeof(qcmbr_data_t));
+
+	if(copy_from_user(qcmbr_data, rq->ifr_data, sizeof(*qcmbr_data))) {
+		ret = -EFAULT;
+		goto exit;
+	}
+
+	ret = ath6kl_qcmbr_unified_ioctl(vif, qcmbr_data);
+
+	if(qcmbr_data->copy_to_user) {
+		ret = copy_to_user(rq->ifr_data, qcmbr_data->buf,
+		qcmbr_data->length+sizeof(struct tcmd_qcmbr_header));
+		printk(KERN_DEBUG "copy to user done with len %d + header size\n", qcmbr_data->length);
+	}
+
+exit:
+	kfree(qcmbr_data);
+	return ret;
+}
+#endif /* CONFIG_LINUX_QCMBR */
+
 int ath6kl_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 {
 	struct ath6kl *ar = ath6kl_priv(dev);
@@ -3097,12 +3225,18 @@ case IEEE80211_IOCTL_KICKMAC:
 	case IEEE80211_IOCTL_DELMAC:
 	case IEEE80211_IOCTL_GET_MACADDR:
 #endif
+		ret = ath6kl_ioctl_standard(dev, rq, cmd);
+		break;
 #ifdef TX99_SUPPORT
 	case SIOCIOCTLTX99:/* TX99 */
 #else
 	case ATH6KL_IOCTL_STANDARD13:	/* TX99 */
 #endif
+#ifdef CONFIG_LINUX_QCMBR
+		ret = ath6kl_ioctl_tcmd(dev, rq, cmd);
+#else
 		ret = ath6kl_ioctl_standard(dev, rq, cmd);
+#endif /* CONFIG_LINUX_QCMBR */
 		break;
 #ifndef CE_SUPPORT
 	case ATH6KL_IOCTL_WEXT_PRIV6:

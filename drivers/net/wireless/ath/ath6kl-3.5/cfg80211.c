@@ -5251,7 +5251,7 @@ static int ath6kl_ap_beacon(struct wiphy *wiphy, struct net_device *dev,
 	int res;
 	int i;
 	u16 chan;
-	u8 passwordless_go = 1;
+	u8 passwordless_go = 0;
 
 	ath6kl_dbg(ATH6KL_DBG_WLAN_CFG, "%s: add=%d\n", __func__, add);
 
@@ -7066,6 +7066,12 @@ struct ath6kl *ath6kl_core_alloc(struct device *dev)
 	}
 
 	ar->btc_status = 0;
+#ifdef CONFIG_LINUX_QCMBR
+	if (testmode == 2) {
+		INIT_LIST_HEAD(&ar->qcmbr_queue_head);
+		spin_lock_init(&ar->qcmbr_queue_lock);
+	}
+#endif
 	return ar;
 }
 
@@ -7407,6 +7413,7 @@ static int ath6kl_init_if_data(struct ath6kl_vif *vif)
 	return 0;
 }
 
+extern u8 registered_idx_0;
 void ath6kl_deinit_if_data(struct ath6kl_vif *vif)
 {
 	struct ath6kl *ar = vif->ar;
@@ -7461,7 +7468,8 @@ void ath6kl_deinit_if_data(struct ath6kl_vif *vif)
 
 	del_timer(&vif->vifscan_timer);
 
-	unregister_netdevice(vif->ndev);
+	if (registered_idx_0)
+		unregister_netdevice(vif->ndev);
 
 	ar->num_vif--;
 }
@@ -7518,8 +7526,11 @@ struct net_device *ath6kl_interface_add(struct ath6kl *ar, char *name,
 			goto err;
 	}
 
-	if (register_netdevice(ndev))
-		goto err;
+	if(fw_vif_idx != 0) {
+		if (register_netdevice(ndev))
+			goto err;
+	} else
+		registered_idx_0 = 0;
 
 	ar->avail_idx_map &= ~BIT(fw_vif_idx);
 	vif->sme_state = SME_DISCONNECTED;

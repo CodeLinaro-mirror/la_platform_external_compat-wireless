@@ -56,6 +56,7 @@ unsigned int ath6kl_ce_flags = 1;
 unsigned int ath6kl_regdb = ATH6KL_REG_INTERNAL_REGDB;
 unsigned short reg_domain = NULL_REG_CODE;	/* user prefer */
 unsigned short reg_domain_used = NULL_REG_CODE;	/* final used */
+unsigned int reg_domain_from_otp = 1;
 #ifdef ATH6KL_SDIO_RECOVER
 unsigned int ath6kl_fw_recovery = 1;
 #endif
@@ -105,6 +106,7 @@ module_param(fwdatapath, charp, 0644);
 module_param(starving_prevention, uint, 0644);
 module_param(ath6kl_regdb, uint, 0644);
 module_param(reg_domain, ushort, 0644);
+module_param(reg_domain_from_otp, uint, 0644);
 #ifdef ATH6KL_SDIO_RECOVER
 module_param(ath6kl_fw_recovery, uint, 0644);
 #endif
@@ -1047,6 +1049,11 @@ int ath6kl_configure_target(struct ath6kl *ar)
 
 	/* set one shot noa enable to firmware */
 	param |= HI_OPTION_ONE_SHOT_NOA_ENABLE ;
+
+	/* Disable OTP reg domain updating */
+	if (!reg_domain_from_otp) {
+	    param |= HI_OPTION_DISABLE_REG_DOMAIN_OTP;
+	}
 
 	ath6kl_dbg(ATH6KL_DBG_BOOT, "Set hi_option_flag2 to 0x%08x\n",
 			param);
@@ -2993,6 +3000,7 @@ void ath6kl_sdio_drive_strength(struct ath6kl *ar)
 	}
 }
 
+u8 registered_idx_0 = 0;
 int ath6kl_core_init(struct ath6kl *ar)
 {
 	struct ath6kl_bmi_target_info targ_info;
@@ -3249,6 +3257,14 @@ int ath6kl_core_init(struct ath6kl *ar)
 	 */
 	memcpy(ndev->dev_addr, ar->mac_addr, ETH_ALEN);
 
+	rtnl_lock();
+	if(register_netdevice(ndev)) {
+		rtnl_unlock();
+		goto err_rxbuf_cleanup;
+	}
+	registered_idx_0 = 1;
+	rtnl_unlock();
+
 #ifdef ATH6KL_DIAGNOSTIC
 	if (!test_bit(TESTMODE_EPPING, &ar->flag))
 		wifi_diag_init();
@@ -3287,7 +3303,7 @@ int ath6kl_core_init(struct ath6kl *ar)
 		}
 	}
 
-#if defined(CE_SUPPORT) || defined(DISABLE_POWER_SAVE)
+#ifdef CE_SUPPORT
 	/* set power saving off as default for wlan0
 	 * (target side default is PS on)
 	*/
@@ -3303,6 +3319,36 @@ int ath6kl_core_init(struct ath6kl *ar)
 			vif_first->wdev.ps = NL80211_PS_DISABLED;
 	}
 #endif
+
+	{
+		struct ath6kl_vif *vif_first;
+		vif_first = ath6kl_vif_first(ar);
+
+#ifdef CONFIG_ANDROID
+		if ((vif_first->fw_vif_idx == 0) &&
+			(vif_first->nw_type == INFRA_NETWORK)) {
+			/* WAR: in extremely loud environment. */
+
+			 ath6kl_dbg(ATH6KL_DBG_EXT_INFO1,
+							"Prolong BMISS time");
+			if (machine_is_apq8064_bueller())
+				ath6kl_wmi_set_bmiss_time(ar->wmi,
+					vif_first->fw_vif_idx,
+					 50);
+			 else
+				ath6kl_wmi_set_bmiss_time(ar->wmi,
+					vif_first->fw_vif_idx,
+					30);
+		}
+#else
+		if ((vif_first->fw_vif_idx == 0) &&
+			(vif_first->nw_type == INFRA_NETWORK)) {
+			ath6kl_wmi_set_bmiss_time(ar->wmi,
+				vif_first->fw_vif_idx,
+				50);
+		}
+#endif
+	}
 	if (ath6kl_mod_debug_quirks(ar, ATH6KL_MODULE_ENABLE_FW_CRASH_NOTIFY)) {
 		ath6kl_info("Enable Firmware crash notify.\n");
 		ar->fw_crash_notify = ath6kl_fw_crash_notify;
@@ -3453,6 +3499,20 @@ void ath6kl_stop_txrx(struct ath6kl *ar)
 	 * are collected.
 	 */
 	ath6kl_wmi_shutdown(ar->wmi);
+
+#ifdef CONFIG_LINUX_QCMBR
+	if (testmode == 2) {
+	    spin_lock_bh(&ar->qcmbr_queue_lock);
+	    if (!list_empty(&ar->qcmbr_queue_head)) {
+	        qcmbr_queue_t *msg_buf, *tmp_buf;
+	        list_for_each_entry_safe(msg_buf, tmp_buf, &ar->qcmbr_queue_head, list) {
+	            list_del(&msg_buf->list);
+	            kfree(msg_buf);
+	        }
+	    }
+	    spin_unlock_bh(&ar->qcmbr_queue_lock);
+	}
+#endif /* CONFIG_LINUX_QCMBR */
 
 	clear_bit(WMI_ENABLED, &ar->flag);
 	if (ar->htc_target) {

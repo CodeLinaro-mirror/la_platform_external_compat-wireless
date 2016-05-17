@@ -338,6 +338,8 @@ struct host_interest {
 
 /* hi_option_flag2 options: Disable MAC address overwrite via OTP Feature */
 #define HI_OPTION_DISABLE_MAC_OTP       0x40
+/* hi_option_flag2 options: Disable reg domain overwrite via OTP Feature */
+#define HI_OPTION_DISABLE_REG_DOMAIN_OTP 0x1000000
 
 #define HI_OPTION_NUM_DEV_SHIFT   0x9
 

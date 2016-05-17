@@ -1421,6 +1421,25 @@ struct bss_post_proc {
 	int aging_time;
 };
 
+#ifdef CONFIG_LINUX_QCMBR
+#define ATH_XIOCTL_UNIFIED_UTF_CMD  0x1000
+#define ATH_XIOCTL_UNIFIED_UTF_RSP  0x1001
+#define MAX_UTF_LENGTH              1024
+
+typedef struct qcmbr_data_s {
+	unsigned int cmd;
+	unsigned int length;
+	unsigned char buf[MAX_UTF_LENGTH + 4];
+	unsigned int copy_to_user;
+} qcmbr_data_t;
+
+typedef struct qcmbr_queue_s {
+	unsigned char utf_buf[MAX_UTF_LENGTH + 4];
+	unsigned int length;
+	struct list_head list;
+} qcmbr_queue_t;
+#endif /* CONFIG_LINUX_QCMBR */
+
 struct ath6kl_vif {
 	struct list_head list;
 	struct wireless_dev wdev;
@@ -1549,6 +1568,7 @@ struct ath6kl_vif {
 	u16 next_conn_status;		/* CR508988 */
 
 	struct timeval last_connect_time;
+	u16 mcastrate;
 };
 
 #define WOW_LIST_ID		0
@@ -1942,6 +1962,11 @@ struct ath6kl {
 	u32 mcc_cc_state[10];
 	u32 mcc_p2p_dwell[10];
 	u32 btc_status;
+
+#ifdef CONFIG_LINUX_QCMBR
+	struct list_head qcmbr_queue_head;
+	spinlock_t qcmbr_queue_lock;
+#endif /* CONFIG_LINUX_QCMBR */
 };
 
 static inline void *ath6kl_priv(struct net_device *dev)
@@ -2127,6 +2152,7 @@ void ath6kl_init_control_info(struct ath6kl_vif *vif);
 void ath6kl_deinit_if_data(struct ath6kl_vif *vif);
 void ath6kl_core_free(struct ath6kl *ar);
 struct ath6kl_vif *ath6kl_vif_first(struct ath6kl *ar);
+struct ath6kl_vif *ath6kl_vif_search(struct ath6kl *ar, char* interface);
 void ath6kl_cleanup_vif(struct ath6kl_vif *vif, bool wmi_ready);
 int ath6kl_init_hw_start(struct ath6kl *ar);
 int ath6kl_init_hw_stop(struct ath6kl *ar);

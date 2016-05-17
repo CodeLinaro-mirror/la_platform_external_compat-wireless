@@ -777,6 +777,9 @@ enum wmi_cmd_id {
 	WMI_SET_MCC_EVENT_MODE_CMDID,
 	WMI_GET_CTL,
 
+	/* new commands */
+	WMI_SET_MCASTRATE_CMDID,
+
 /* merge from olca mainline for align command id - end
  * private commands shall grow back from 0xFFFE
  */
@@ -1453,6 +1456,10 @@ struct wmi_channel_list_reply {
 
 	/* channel in Mhz */
 	__le16 ch_list[1];
+} __packed;
+
+struct wmi_set_mcastrate_cmd {
+	u16 bitrate;
 } __packed;
 
 /* List of Events (target to host) */
@@ -3609,4 +3616,5 @@ int ath6kl_wmi_set_bmiss_time(struct wmi *wmi, u8 if_idx, u16 numBeacon);
 int ath6kl_wmi_set_scan_chan_plan(struct wmi *wmi, u8 if_idx,
 					u8 type, u8 numChan, u16 *chanList);
 int ath6kl_wmi_set_dtim_ext(struct wmi *wmi, u8 dtim_ext);
+int ath6kl_wmi_mcastrate_cmd(struct wmi *wmi, u8 if_idx, u16 bitrate);
 #endif /* WMI_H */

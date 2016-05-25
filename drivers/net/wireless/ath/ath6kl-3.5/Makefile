@@ -40,6 +40,7 @@ ath6kl_sdio-y += diag.o
 ath6kl_sdio-y += htcoex.o
 ath6kl_sdio-y += ath_netlink.o
 ath6kl_sdio-$(CONFIG_QC_INTERNAL) += intra_reg.o
+#ath6kl_sdio-$(CONFIG_ACS_SUPPORT) += acs.o
 ath6kl_sdio-y += pm.o
 ath6kl_sdio-y += p2p.o
 ath6kl_sdio-y += ap.o
@@ -79,9 +80,13 @@ ccflags-$(CONFIG_FPGA) += -DCONFIG_FPGA
 ccflags-y += -D__CHECK_ENDIAN__
 ccflags-y += -DCONFIG_BTCOEX_OLCA_3_5
 ccflags-$(CONFIG_ATH6KL_UB134) += -DCONFIG_ATH6KL_UDP_TPUT_WAR
-ifeq ($(CONFIG_LINUX_QCMBR), y)
-ccflags-y += -DCONFIG_LINUX_QCMBR
-endif
+ifeq ($(CONFIG_LINUX_QCMBR), y) 
+ccflags-y += -DCONFIG_LINUX_QCMBR 
+endif 
+
+#ifeq ($(CONFIG_ACS_SUPPORT),y)
+ccflags-y += -DACS_SUPPORT
+#endif
 
 
 EXTRA_CFLAGS += -I${KBUILDPATH}/drivers/net/wireless/ath/ath6kl

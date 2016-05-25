@@ -26,6 +26,432 @@
 #include "ce_athtst.h"
 #endif
 
+#ifndef ACS_SUPPORT
+#define ACS_SUPPORT
+#endif
+
+
+#ifdef ACS_SUPPORT
+
+void ieee80211_acs_construct_chan_list(struct wiphy *wiphy,
+                         ieee80211_acs_t acs)
+{
+        enum ieee80211_band band;
+        struct ieee80211_supported_band *sband;
+        int i;
+
+	ath6kl_err("FHQ into main.c %s\n", __func__);
+        /* reset channel mapping array */
+        memset(&acs->acs_chan_maps, 0xff, sizeof(acs->acs_chan_maps));
+        memset(&acs->acs_chan_maxrssi,0x0, sizeof(acs->acs_chan_maxrssi));
+        acs->acs_nchans = 0;
+
+        for (band = 0; band < IEEE80211_NUM_BANDS; band++) {
+                sband = wiphy->bands[band];
+
+                if (!sband)
+                        continue;
+
+                for (i = 0; i < sband->n_channels; i++) {
+                        acs->acs_chan_maps[ieee80211_frequency_to_channel(sband->channels[i].center_freq)] = acs->acs_nchans;
+                        acs->acs_chans[acs->acs_nchans++] = &sband->channels[i];
+                }   
+        }   
+}
+
+
+struct ieee80211_channel *ieee80211_is_support_band(struct wiphy *wiphy,
+                         int freq,enum ieee80211_band band)
+{
+        struct ieee80211_supported_band *sband;
+        int i;
+        enum ieee80211_band band_temp;
+        sband = wiphy->bands[band];
+        for (band_temp = 0; band_temp < IEEE80211_NUM_BANDS; band_temp++) {
+                sband = wiphy->bands[band_temp];
+                if (!sband)
+                        return NULL;
+                if(band != IEEE80211_NUM_BANDS) {
+                        if(band_temp != band)
+                                continue;
+                }
+                for (i = 0; i < sband->n_channels; i++) {
+                        if (sband->channels[i].center_freq == freq)
+                                return &sband->channels[i];
+                }
+        }
+        return NULL;
+}
+
+static void acs_flush_bss_info(struct acs *acs)
+{
+        struct acs_bss_info *acs_bss, *tmp;
+
+	ath6kl_err("FHQ into main.c %s\n", __func__);
+        spin_lock(&acs->bss_info_lock);
+
+        list_for_each_entry_safe(acs_bss, tmp, &acs->bss_info_list, list) {
+                list_del(&acs_bss->list);
+                //kfree(acs_bss->raw_frame);
+                kfree(acs_bss);
+        }
+
+        spin_unlock(&acs->bss_info_lock);
+
+        return;
+}
+
+struct acs *ath6kl_acs_init(struct ath6kl_vif *vif)
+{
+        struct acs *acs;
+
+        acs = kzalloc(sizeof(struct acs), GFP_KERNEL);
+        if (!acs) {
+                ath6kl_err("failed to alloc memory for acs\n");
+                return NULL;
+        }
+
+        acs->vif = vif;
+        acs->acs_need_active = true;
+#if 0
+        //acs->request.dev = vif->ndev;
+        acs->request.wdev = &vif->wdev;
+        acs->request.wiphy = vif->ar->wiphy;
+#endif
+
+        spin_lock_init(&acs->bss_info_lock);
+        INIT_LIST_HEAD(&acs->bss_info_list);
+
+        ath6kl_dbg(ATH6KL_DBG_ACS,
+                   "acs init (vif %p)\n",
+                   vif);
+
+        return acs;
+}
+
+void ath6kl_acs_deinit(struct ath6kl_vif *vif)
+{
+        struct acs *acs = vif->acs_ctx;
+
+	ath6kl_err("FHQ into main.c %s\n", __func__);
+        if (acs) {
+                acs_flush_bss_info(acs);
+
+                kfree(acs);
+        }
+
+        vif->acs_ctx = NULL;
+
+        ath6kl_dbg(ATH6KL_DBG_ACS,
+                   "acs deinit (vif %p)\n",
+                   vif);
+
+        return;
+}
+
+void ath6kl_acs_bss_info(struct ath6kl_vif *vif,
+                                struct ieee80211_mgmt *mgmt,
+                                int len,
+                                struct ieee80211_channel *channel, u8 snr)
+{
+        struct acs *acs = vif->acs_ctx;
+        struct acs_bss_info *acs_bss, *tmp;
+        int match = 0;
+	ath6kl_err("FHQ %s \n", __func__);
+        if (!acs->acs_need_active){
+	ath6kl_err("FHQ %s !acs->acs_need_active return, donot do anything\n", __func__);
+                return;}
+
+        /* Add bss even scan not issue by htcoex. */
+        if (memcmp(mgmt->bssid, vif->bssid, ETH_ALEN) == 0)
+                return;
+
+        ath6kl_dbg(ATH6KL_DBG_ACS,
+        "acs bssinfo (vif %p) BSSID %02x:%02x:%02x:%02x:%02x:%02x  CH: %d, snr: %d\n",
+        vif,
+        mgmt->bssid[0], mgmt->bssid[1], mgmt->bssid[2],
+        mgmt->bssid[3], mgmt->bssid[4], mgmt->bssid[5],
+        ieee80211_frequency_to_channel(channel->center_freq), snr);
+
+        if (!list_empty(&acs->bss_info_list)) {
+                list_for_each_entry_safe(acs_bss, tmp,
+                        &acs->bss_info_list, list) {
+                        if (memcmp(acs_bss->bssid, mgmt->bssid,
+                                        ETH_ALEN) == 0) {
+                                match = 1;
+                                break;
+                        }
+                }
+        }
+
+        if (!match) {
+                acs_bss = kzalloc(sizeof(struct acs_bss_info), GFP_KERNEL);
+                if (!acs_bss) {
+                        ath6kl_err("failed to alloc memory for acs_bss\n");
+                        return;
+                }
+
+#if 0
+                acs_bss->raw_frame = kmalloc(len, GFP_KERNEL);
+                if (!acs_bss->raw_frame) {
+                        kfree(acs_bss);
+                        ath6kl_err("failed to alloc memory for acs_bss->raw_frame\n");
+                        return;
+                }
+#endif
+
+                /* Add BSS info. */
+                //acs_bss->frame_len = len;
+//              memcpy(acs_bss->raw_frame, mgmt, len);
+                memcpy(acs_bss->bssid, mgmt->bssid, ETH_ALEN);
+                acs_bss->channel = channel;
+                acs_bss->snr = snr;
+                spin_lock(&acs->bss_info_lock);
+                list_add_tail(&acs_bss->list, &acs->bss_info_list);
+                spin_unlock(&acs->bss_info_lock);
+        }
+
+        return;
+}
+
+int ath6kl_acs_scan_complete_event(struct ath6kl_vif *vif, bool aborted)
+{
+        struct acs *acs = vif->acs_ctx;
+        int ret = 0;
+
+	ath6kl_err("FHQ into main.c %s\n", __func__);
+        if (!acs->acs_need_active)
+                return ret;
+
+        if (aborted == 1)
+                return ret;
+        /* Send Action frame even scan issue by user. */
+        if (!vif->scan_req)
+                goto done;
+
+        ath6kl_dbg(ATH6KL_DBG_ACS, "acs scan done (vif %p aborted %d)\n",
+                   vif,
+                   aborted);
+
+
+#if 1
+        /* don't update it if single channel scan. */
+        if (vif->scan_req->n_channels > 3) {
+                ath6kl_acs_find_info(vif);
+        }
+#endif
+done:
+        /* Always flush it. */
+        acs_flush_bss_info(acs);
+
+        return ret;
+}
+
+/*
+ * Trace all entries to record the max rssi found for every channel.
+ */
+static int
+ieee80211_acs_get_channel_maxrssi(void *arg, struct acs_bss_info *coex_bss)
+{
+        ieee80211_acs_t acs = (ieee80211_acs_t) arg;
+        int i, j;
+        struct ieee80211_channel *channel_se = coex_bss->channel;
+        struct ieee80211_channel *channel;
+        u_int8_t rssi_se = coex_bss->snr;
+        u_int8_t channel_ieee_se = ieee80211_frequency_to_channel(
+                        channel_se->center_freq);
+
+        for (i = 0; i < acs->acs_nchans; i++) {
+                channel = acs->acs_chans[i];
+
+                if (channel_ieee_se ==
+                        ieee80211_frequency_to_channel(channel->center_freq)) {
+                        j = acs->acs_chan_maps[ieee80211_frequency_to_channel(
+                                channel->center_freq)];
+                        if (rssi_se > acs->acs_chan_maxrssi[j]) {
+                                ath6kl_dbg(ATH6KL_DBG_ACS,
+                                        "%s chan %d rssi from %d to %d, index=%d\n",
+                                        __func__,
+                                        channel_ieee_se,
+                                        acs->acs_chan_maxrssi[j],
+                                        rssi_se, j);
+                                acs->acs_chan_maxrssi[j] = rssi_se;
+                        }
+                        break;
+                }
+        }
+
+        return 0;
+}
+
+/*
+ * In 5 GHz, if the channel is unoccupied the max rssi
+ * should be zero; just take it.Otherwise
+ * track the channel with the lowest rssi and
+ * use that when all channels appear occupied.
+ */
+//extern struct ieee80211_channel ath6kl_5ghz_a_channels[];
+#define ATH6KL_5G_CHANNELS_NUM  29
+
+static void
+ieee80211_acs_calculate_11na_channel(struct ath6kl_vif *vif,
+                        ieee80211_acs_t acs)
+{
+        struct acs *acs_ctx = vif->acs_ctx;
+        struct ieee80211_channel *channel;
+        int j;
+
+        struct wiphy *wiphy = vif->wdev.wiphy;
+        struct ieee80211_supported_band *band = wiphy->bands[IEEE80211_BAND_5GHZ];
+
+        for (j = 0; j < (ATH6KL_5G_CHANNELS_NUM + 1); j++) {
+                channel = &band->channels[j];
+
+                if (ieee80211_is_support_band(vif->wdev.wiphy,
+                                channel->center_freq,
+                                IEEE80211_BAND_5GHZ) && ((channel->flags & IEEE80211_CHAN_DISABLED) != IEEE80211_CHAN_DISABLED) &&
+                                ((channel->flags & IEEE80211_CHAN_RADAR) != IEEE80211_CHAN_RADAR) &&
+                                ((channel->flags & IEEE80211_CHAN_PASSIVE_SCAN) != IEEE80211_CHAN_PASSIVE_SCAN)) {
+
+                        int acs_nchan_index = acs->acs_chan_maps[ieee80211_frequency_to_channel(channel->center_freq)];
+                        acs_ctx->max_rssi_5g[j] = acs->acs_chan_maxrssi[acs_nchan_index];
+                        //printk(KERN_ERR"j= %d, acs_nchan_index:%d, max_rssi:%d\n", j, acs_nchan_index, acs_ctx->max_rssi_5g[j] );
+
+                }else{
+                        acs_ctx->max_rssi_5g[j] = 0xff;
+                }
+        }
+
+}
+
+static u_int32_t ieee80211_acs_find_average_rssi(ieee80211_acs_t acs,
+                        const int *chanlist, int chancount, u_int8_t centChan)
+{
+        u_int8_t chan;
+        int i, j;
+        u_int32_t average = 0;
+        u_int32_t totalrssi = 0; /* total rssi for all channels so far */
+
+        if (chancount <= 0) {
+                /* return a large enough number for not to choose
+                        this channel */
+                return 0xffffffff;
+        }
+
+        for (i = 0; i < chancount; i++) {
+                chan = chanlist[i];
+
+                j = acs->acs_chan_maps[chan];
+                if (j != 0xff) {
+                        totalrssi += acs->acs_chan_maxrssi[j];
+
+                        ath6kl_dbg(ATH6KL_DBG_ACS,
+                        "%s chan: %d maxrssi: %d\n",
+                        __func__, chan, acs->acs_chan_maxrssi[j]);
+                }
+        }
+
+        average = totalrssi/chancount;
+
+        ath6kl_dbg(ATH6KL_DBG_ACS,
+                "Channel %d average beacon RSSI %d\n",
+                centChan, average);
+
+        return average;
+}
+
+/* coded for dyn acs feature */
+static void
+ieee80211_acs_caculate_11ng_channel(struct ath6kl_vif *vif,
+                                        ieee80211_acs_t acs)
+{
+        struct acs *acs_ctx = vif->acs_ctx;
+        struct ieee80211_channel *channel;
+        int i, j;
+        u_int8_t chan;
+        u_int32_t avg_rssi;
+        u_int chanlist[5];
+        int count = 0;
+
+    /* printk("%s: acs_nchans = %d\n", __func__, acs->acs_nchans); */
+        for (i = 0; i < acs->acs_nchans; i++) {
+                channel = acs->acs_chans[i];
+                chan = ieee80211_frequency_to_channel(channel->center_freq);
+
+                if (chan < 1 || chan > 11)
+                        continue;
+                if ( ((channel->flags & IEEE80211_CHAN_DISABLED) == IEEE80211_CHAN_DISABLED) ||
+                         ((channel->flags & IEEE80211_CHAN_RADAR) == IEEE80211_CHAN_RADAR) ||
+                         ((channel->flags & IEEE80211_CHAN_PASSIVE_SCAN) == IEEE80211_CHAN_PASSIVE_SCAN)) {
+                        continue;
+                }
+
+                count = 0;
+                chanlist[count++] = chan;
+
+                for (j = 1; j <= 2; j++) {
+                        if (chan - j >= 1)
+                                chanlist[count++] = chan - j;
+                        if (chan + j <= 11)
+                                chanlist[count++] = chan + j;
+                }
+
+                /*printk("%s: count = %d, center channels for %d: (",
+                                __func__, count, chan);
+
+                for (j = 0; j < count; j++) {
+                        printk("%d,",chanlist[j]);
+                }
+                printk(")");*/
+
+                /* find the average rssi for this 20Mhz band */
+                avg_rssi = ieee80211_acs_find_average_rssi(acs, chanlist, count,
+                                                chan);
+
+                acs_ctx->avg_rssi_2g[chan-1] = avg_rssi;
+
+                ath6kl_dbg(ATH6KL_DBG_ACS,
+                        "%s chan: %d beacon RSSI + weighted noisefloor: %d\n",
+                        __func__, chan, avg_rssi);
+        }
+}
+
+int ath6kl_acs_find_info(struct ath6kl_vif *vif)
+{
+        struct acs *acs = vif->acs_ctx;
+        struct acs_bss_info *acs_bss, *tmp;
+        ieee80211_acs_t temp_acs;
+
+        temp_acs = (ieee80211_acs_t) kmalloc(sizeof(struct ieee80211_acs),
+                                        GFP_ATOMIC);
+        if (temp_acs) {
+                memset(temp_acs, 0x00, sizeof(struct ieee80211_acs));
+        } else {
+                ath6kl_dbg(ATH6KL_DBG_ACS, "%s: malloc failed\n", __func__);
+                return -1;
+        }
+
+        temp_acs->acs_nchans = 0;
+
+        ieee80211_acs_construct_chan_list(vif->wdev.wiphy, temp_acs);
+
+        /* find max rssi for each channel */
+        if (!list_empty(&acs->bss_info_list)) {
+                list_for_each_entry_safe(acs_bss,
+                        tmp,
+                        &acs->bss_info_list, list)
+                        ieee80211_acs_get_channel_maxrssi(temp_acs, acs_bss);
+        }
+
+        ieee80211_acs_calculate_11na_channel(vif, temp_acs);
+        ieee80211_acs_caculate_11ng_channel(vif, temp_acs);
+
+        kfree(temp_acs);
+        return 0;
+}
+
+#endif
+
 int _string_to_mac(char *string, int len, u8 *macaddr)
 {
 	int i, k, ret;
@@ -672,15 +1098,19 @@ void ath6kl_bss_post_proc_deinit(struct ath6kl_vif *vif)
 void ath6kl_bss_post_proc_bss_scan_start(struct ath6kl_vif *vif)
 {
 	struct bss_post_proc *post_proc = vif->bss_post_proc_ctx;
+	ath6kl_err("FHQ %s \n", __func__);
 
-	if (!post_proc)
-		return;
+	if (!post_proc){
+	ath6kl_err("FHQ %s !post_proc return donot do anything\n", __func__);
+		return;}
 
 	/* Always flush old bss_info before start a new scan. */
-	if (post_proc->flags & ATH6KL_BSS_POST_PROC_CACHED_BSS)
-		bss_proc_post_flush(post_proc, false);
-	else
-		bss_proc_post_flush(post_proc, true);
+	if (post_proc->flags & ATH6KL_BSS_POST_PROC_CACHED_BSS){
+	ath6kl_err("FHQ %s ATH6KL_BSS_POST_PROC_CACHED_BSS invoke bss_proc_post_flush(post_proc, false)\n", __func__);
+		bss_proc_post_flush(post_proc, false);}
+	else{
+	ath6kl_err("FHQ %s invoke bss_proc_post_flush(post_proc, true)\n", __func__);
+		bss_proc_post_flush(post_proc, true);}
 
 	set_bit(BSS_POST_PROC_SCAN_ONGOING, &post_proc->stat);
 
@@ -696,6 +1126,7 @@ int ath6kl_bss_post_proc_bss_complete_event(struct ath6kl_vif *vif)
 	struct bss_info_entry *bss_info, *tmp;
 	struct cfg80211_bss *bss;
 	int cnt = 0;
+	ath6kl_err("FHQ %s \n", __func__);
 
 	if (!post_proc)
 		return 0;
@@ -1801,10 +2232,12 @@ void ath6kl_scan_complete_evt(struct ath6kl_vif *vif, int status)
 	struct ath6kl *ar = vif->ar;
 	bool aborted = false;
 
+	ath6kl_err("FHQ %s \n", __func__);
 	if (status != WMI_SCAN_STATUS_SUCCESS)
 		aborted = true;
 #ifdef ACS_SUPPORT
 	/* FIXME : bad, may use call-back instead. */
+	ath6kl_err("FHQ %s #ifdef ACS_SUPPORT invoke ath6kl_acs_scan_complete_event()\n", __func__);
 	ath6kl_acs_scan_complete_event(vif, aborted);
 #endif
 

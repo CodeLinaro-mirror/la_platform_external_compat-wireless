@@ -23,6 +23,10 @@
 #endif
 #endif
 
+#ifndef ACS_SUPPORT
+#define ACS_SUPPORT
+#endif
+
 #include <linux/etherdevice.h>
 #include <linux/rtnetlink.h>
 #include <linux/firmware.h>
@@ -44,9 +48,9 @@
 #include "bmi.h"
 #include "target.h"
 #include "wmi_btcoex.h"
-#ifdef ACS_SUPPORT
-#include "acs.h"
-#endif
+//#ifdef ACS_SUPPORT
+//#include "acs.h"
+//#endif
 #include "htcoex.h"
 #include "p2p.h"
 #include "ap.h"
@@ -58,7 +62,7 @@
 #define TO_STR(symbol) MAKE_STR(symbol)
 
 /* The script (used for release builds) modifies the following line. */
-#define __BUILD_VERSION_ (3.5.0.592)
+#define __BUILD_VERSION_ (3.5.0.700)
 
 #define DRV_VERSION		TO_STR(__BUILD_VERSION_)
 
@@ -1392,6 +1396,55 @@ struct WMI_AP_ACL {
 	u8	policy;
 };
 #endif
+
+
+#define IEEE80211_CHAN_MAX  64
+struct ieee80211_acs {
+    struct ieee80211_channel            *acs_channel;
+
+    u_int16_t                           acs_nchans;         /* # of all available chans */
+    struct ieee80211_channel            *acs_chans[IEEE80211_CHAN_MAX];
+    u_int8_t                            acs_chan_maps[IEEE80211_CHAN_MAX];       /* channel mapping array */
+    u_int8_t                            acs_chan_maxrssi[IEEE80211_CHAN_MAX];    /* max rssi of these channels */
+};
+typedef struct ieee80211_acs    *ieee80211_acs_t;
+
+struct acs_bss_info {
+	struct list_head list;
+	u8 snr;
+//	u8 *raw_frame;
+//	u16 frame_len;
+	u8 bssid[ETH_ALEN];
+	struct ieee80211_channel *channel;
+};
+
+#define ACS_MAX_2G_CHAN_NUM  12
+#define ACS_MAX_5G_CHAN_NUM  64
+
+struct acs {
+	struct ath6kl_vif *vif;
+	//struct cfg80211_scan_request request;
+    bool acs_need_active; //for optimization
+
+	spinlock_t bss_info_lock;
+	struct list_head bss_info_list;
+
+    bool acs_2g_enabled;
+    u8 avg_rssi_2g[ACS_MAX_2G_CHAN_NUM];
+    u8 max_rssi_5g[ACS_MAX_5G_CHAN_NUM];
+};
+
+
+struct acs *ath6kl_acs_init(struct ath6kl_vif *vif);
+void ath6kl_acs_deinit(struct ath6kl_vif *vif);
+void ath6kl_acs_bss_info(struct ath6kl_vif *vif,
+					struct ieee80211_mgmt *mgmt,
+					int len,
+					struct ieee80211_channel *channel,
+					u8 snr);
+int ath6kl_acs_scan_complete_event(struct ath6kl_vif *vif, bool aborted);
+int ath6kl_acs_find_info(struct ath6kl_vif *vif) ;
+
 
 struct bss_info_entry {
 	struct list_head list;

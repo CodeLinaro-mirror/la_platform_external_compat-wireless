@@ -3499,6 +3499,19 @@ void ath6kl_stop_txrx(struct ath6kl *ar)
 	 * are collected.
 	 */
 	ath6kl_wmi_shutdown(ar->wmi);
+#ifdef CONFIG_LINUX_QCMBR
+	if (testmode == 2) {
+	    spin_lock_bh(&ar->qcmbr_queue_lock);
+	    if (!list_empty(&ar->qcmbr_queue_head)) {
+	        qcmbr_queue_t *msg_buf, *tmp_buf;
+	        list_for_each_entry_safe(msg_buf, tmp_buf, &ar->qcmbr_queue_head, list) {
+	            list_del(&msg_buf->list);
+	            kfree(msg_buf);
+	        }
+	    }
+	    spin_unlock_bh(&ar->qcmbr_queue_lock);
+	}	
+#endif /* CONFIG_LINUX_QCMBR */
 
 #ifdef CONFIG_LINUX_QCMBR
 	if (testmode == 2) {

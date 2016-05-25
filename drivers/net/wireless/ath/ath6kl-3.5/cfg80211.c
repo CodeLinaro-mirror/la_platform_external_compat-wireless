@@ -2434,7 +2434,15 @@ static int _ath6kl_cfg80211_scan(struct wiphy *wiphy, struct net_device *ndev,
 				"failed to set scan chan, scan all channel\n");
 			n_channels = 0;
 		}
-
+#ifdef ACS_SUPPORT
+		{
+			struct acs *acs_ctx = vif->acs_ctx;
+			if (acs_ctx) {
+				acs_ctx->acs_2g_enabled =  (request->channels[0]->center_freq < 3000) ? 1: 0;
+				ath6kl_dbg(ATH6KL_DBG_ACS,"acs_2g_enabled set as %d\n", acs_ctx->acs_2g_enabled);
+			}
+		}
+#endif
 		if (n_channels) {
 			/* Rearrange according scanband */
 			n_channels = ath6kl_scanband(vif,
@@ -5538,7 +5546,14 @@ static int ath6kl_start_ap(struct wiphy *wiphy, struct net_device *dev,
 
 	ret = ath6kl_ap_beacon(wiphy, dev, info, true);
 	kfree(info);
-
+#ifdef ACS_SUPPORT
+	if (ret == 0) {
+		struct ath6kl_vif *vif = netdev_priv(dev);
+		struct acs *acs_ctx = vif->acs_ctx;
+		acs_ctx->acs_need_active = false; //Mark it
+		ath6kl_dbg(ATH6KL_DBG_ACS, "%s: acs_need_active set as FALSE\n", __func__);
+	}
+#endif
 	return ret;
 }
 
@@ -5609,7 +5624,14 @@ static int ath6kl_add_beacon(struct wiphy *wiphy, struct net_device *dev,
 
 	ret = ath6kl_ap_beacon(wiphy, dev, info, true);
 	kfree(info);
-
+#ifdef ACS_SUPPORT
+	if (ret == 0) {
+		struct ath6kl_vif *vif = netdev_priv(dev);
+		struct acs *acs_ctx = vif->acs_ctx;
+		acs_ctx->acs_need_active = false; //Mark it
+		ath6kl_dbg(ATH6KL_DBG_ACS, "%s: acs_need_active set as FALSE\n", __func__);
+	}
+#endif
 	return ret;
 }
 
@@ -5685,7 +5707,13 @@ static int ath6kl_del_beacon(struct wiphy *wiphy, struct net_device *dev)
 	ath6kl_switch_parameter_based_on_connection(vif, true);
 
 	up(&ar->sem);
-
+#ifdef ACS_SUPPORT
+	{
+		struct acs *acs_ctx = vif->acs_ctx;
+		acs_ctx->acs_need_active = true; //Mark it
+		ath6kl_dbg(ATH6KL_DBG_ACS, "%s: acs_need_active set as TRUE\n", __func__);
+	}
+#endif
 	return 0;
 }
 
@@ -6652,6 +6680,52 @@ static int ath6kl_cfg80211_ap_acl(struct wiphy *wiphy, struct net_device *dev,
 	return 0;
 }
 #endif
+#ifdef ACS_SUPPORT
+
+#define SUPPLICANT_SURVEY_COUNT 11
+
+static int ath6kl_dump_survey(struct wiphy *wiphy, struct net_device *dev,
+                    int idx, struct survey_info *survey)
+{
+    struct ath6kl_vif *vif = netdev_priv(dev);
+    struct acs *acs = vif->acs_ctx;
+    int ret = -ENONET;
+    int index;
+    struct ieee80211_supported_band *band;
+
+    if (!vif)
+        return ret;
+
+    if (!acs->acs_2g_enabled ) {
+        index = idx % (SUPPLICANT_SURVEY_COUNT + 1);
+        if (index == SUPPLICANT_SURVEY_COUNT)
+            return ret;
+
+        ath6kl_dbg(ATH6KL_DBG_ACS,"#### 5G ath6kl_dump_survey called###, idx= %d, noise=%d\n", idx, acs->max_rssi_5g[index+19] );
+
+        band = wiphy->bands[IEEE80211_BAND_5GHZ];
+        survey->channel = &band->channels[index+19];  /* from index 19 to index 28 from ath6kl_5ghz_a_channels */
+        survey->noise =  acs->max_rssi_5g[index+19];
+        survey->filled = 0xf; 
+        return 0;
+    }else{
+        index = idx % (SUPPLICANT_SURVEY_COUNT + 1);
+        if (index == SUPPLICANT_SURVEY_COUNT) {
+            return ret;
+        }
+
+        ath6kl_dbg(ATH6KL_DBG_ACS,"#### 2G ath6kl_dump_survey called###, idx= %d, noise=%d\n", idx, acs->avg_rssi_2g[index] );
+    
+        band = wiphy->bands[IEEE80211_BAND_2GHZ];
+        survey->channel = &band->channels[index];    
+        survey->noise =  acs->avg_rssi_2g[index];
+        survey->filled = 0xf; 
+        return 0;
+    }
+
+    return ret; //should never called here
+}
+#endif
 
 /* NOTE : this table may be over-wrote by ath6kl_change_cfg80211_ops() call. */
 static struct cfg80211_ops ath6kl_cfg80211_ops = {
@@ -6708,6 +6782,9 @@ static struct cfg80211_ops ath6kl_cfg80211_ops = {
 	.mgmt_frame_register = ath6kl_mgmt_frame_register,
 #ifdef NL80211_CMD_BTCOEX_QCA
 	.notify_btcoex = ath6kl_notify_btcoex,
+#endif
+#ifdef ACS_SUPPORT
+	.dump_survey = ath6kl_dump_survey,
 #endif
 };
 

@@ -17,6 +17,11 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
+#ifndef ACS_SUPPORT
+#define ACS_SUPPORT
+#endif
+
+
 #include "hif.h"
 
 enum ATH6KL_MODULE_QUIRKS {

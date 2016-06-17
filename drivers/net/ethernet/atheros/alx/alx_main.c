@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2015, The Linux Foundation. All rights reserved. */
+/* Copyright (c) 2014-2016, The Linux Foundation. All rights reserved. */
 /*
  * Copyright (c) 2012 Qualcomm Atheros, Inc.
  *
@@ -71,7 +71,7 @@ static void alx_stop_internal(struct alx_adapter *adpt, u32 ctrl);
 static void alx_init_ring_ptrs(struct alx_adapter *adpt);
 
 #ifdef MDM_PLATFORM
-static int alx_ipa_rm_try_release(struct alx_adapter *adpt);
+static int alx_ipa_rm_try_release(struct alx_adapter *adpt, bool suspend);
 static int alx_ipa_setup_rm(struct alx_adapter *adpt);
 
 /* Global CTX PTR which can be used for debugging */
@@ -3345,10 +3345,8 @@ static int alx_suspend(struct device *dev)
 	if (retval)
 		return retval;
 
-	if (alx_ipa_rm_try_release(adpt))
-		pr_err("%s -- ODU PROD Release unsuccessful \n",__func__);
-	else
-		adpt->palx_ipa->ipa_prod_rm_state = ALX_IPA_RM_RELEASED;
+	if(alx_ipa_rm_try_release(adpt, true))
+           pr_err("%s -- ODU PROD Release unsuccessful \n",__func__);
 
 	if (wakeup) {
 		pci_prepare_to_sleep(pdev);
@@ -3657,8 +3655,9 @@ static void alx_link_task_routine(struct alx_adapter *adpt)
 		} else {
 			CLI_ADPT_FLAG(2, ODU_CONNECT);
 			adpt->palx_ipa->alx_ipa_perf_requested = false;
-			if (alx_ipa_rm_try_release(adpt))
-				pr_err("%s -- ODU PROD Release unsuccessful \n",__func__);
+			if(alx_ipa_rm_try_release(adpt, false))
+                           pr_err("%s -- ODU PROD Release unsuccessful \n",
+                                                                     __func__);
 		}
 #endif
 	}
@@ -3802,8 +3801,6 @@ static void alx_ipa_send_routine(struct work_struct *work)
 		}
 	}
 	/* Release PROD if we dont have any more data to send*/
-	if (adpt->pendq_cnt == 0)
-		alx_ipa_rm_try_release(adpt);
 	spin_unlock_bh(&adpt->flow_ctrl_lock);
 }
 
@@ -4255,6 +4252,8 @@ static void alx_ipa_tx_dp_cb(void *priv, enum ipa_dp_evt_type evt,
 			!CHK_ADPT_FLAG(2, WQ_SCHED)) {
 			schedule_ipa_work = true;
 		}
+                if (adpt->pendq_cnt == 0)
+                  alx_ipa_rm_try_release(adpt, false);
 		spin_unlock_bh(&adpt->flow_ctrl_lock);
 		if (schedule_ipa_work) {
 			SET_ADPT_FLAG(2, WQ_SCHED);
@@ -4818,12 +4817,21 @@ static int alx_ipa_rm_request(struct alx_adapter *adpt)
 }
 
 /* Release IPA RM Resource for ODU_PROD if not needed*/
-static int alx_ipa_rm_try_release(struct alx_adapter *adpt)
+static int alx_ipa_rm_try_release(struct alx_adapter *adpt, bool suspend)
 {
+        int ret = -1;
+        struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
 	pr_debug("%s:%d \n",__func__,__LINE__);
+        if(suspend)
+		ret = ipa_rm_release_resource(IPA_RM_RESOURCE_ODU_ADAPT_PROD);
+	else
+		ret = ipa_rm_inactivity_timer_release_resource(
+                                             IPA_RM_RESOURCE_ODU_ADAPT_PROD);
 
-	return ipa_rm_inactivity_timer_release_resource(
-					IPA_RM_RESOURCE_ODU_ADAPT_PROD);
+        if (ret == 0){
+          alx_ipa->ipa_prod_rm_state = ALX_IPA_RM_RELEASED;
+        }
+        return ret;
 }
 #endif
 

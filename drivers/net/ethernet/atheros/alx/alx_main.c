@@ -3771,6 +3771,11 @@ static void alx_ipa_send_routine(struct work_struct *work)
 		spin_unlock_bh(&adpt->flow_ctrl_lock);
 		return;
 	}
+        if (adpt->pendq_cnt > 0 && alx_ipa_rm_request(adpt) != 0 ) {
+               pr_info("%s IPA RM resource not granted,return \n", __func__);
+               spin_unlock_bh(&adpt->flow_ctrl_lock);
+               return;
+        }
 
 	while (adpt->ipa_free_desc_cnt && adpt->pendq_cnt) {
 		node = list_first_entry(&adpt->pend_queue_head,
@@ -4803,7 +4808,7 @@ static int alx_ipa_rm_request(struct alx_adapter *adpt)
 			alx_ipa->acquire_wake_src = true;
 		}
 		spin_unlock_bh(&alx_ipa->rm_ipa_lock);
-		ret = 0;
+		ret = -EINPROGRESS;
 	} else if (ret == 0) {
 		spin_lock_bh(&alx_ipa->ipa_rm_state_lock);
 		alx_ipa->ipa_prod_rm_state = ALX_IPA_RM_GRANTED;
@@ -4812,6 +4817,7 @@ static int alx_ipa_rm_request(struct alx_adapter *adpt)
 			alx_ipa_rm_state_to_str(alx_ipa->ipa_prod_rm_state));
 	} else {
 		pr_err("%s -- IPA RM Request failed ret=%d\n",__func__, ret);
+                ret = -EINVAL;
 	}
 	return ret;
 }

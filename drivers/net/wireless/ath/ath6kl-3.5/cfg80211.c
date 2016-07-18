@@ -4356,16 +4356,8 @@ static bool ath6kl_cfg80211_need_suspend(struct ath6kl *ar, u32 *suspend_vif)
 	for (i = 0; i < ar->vif_max; i++) {
 		vif = ath6kl_get_vif_by_index(ar, i);
 		if (vif) {
-			#ifdef CE_SUPPORT
 			if (vif->nw_type != AP_NETWORK)
 				*suspend_vif |= (1 << i);
-			#else
-			if (vif->nw_type == AP_NETWORK) {
-				*suspend_vif = 0;
-				return false;
-			}
-			*suspend_vif |= (1 << i);
-			#endif
 		}
 	}
 

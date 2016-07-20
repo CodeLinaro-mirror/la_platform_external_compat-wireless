@@ -891,7 +891,9 @@ void ath6kl_hsic_exit_msm(void)
 }
 #else
 
+#ifdef MSM_SDIO_PROBE_ENABLE
 struct semaphore wifi_control_sem;
+#endif
 
 static int ath6kl_sdio_probe(struct platform_device *pdev)
 {
@@ -906,7 +908,9 @@ static int ath6kl_sdio_probe(struct platform_device *pdev)
 	if (!pdata) {
 		ath6kl_err("%s: Could not allocate memory for platform data\n",
 				__func__);
+#ifdef MSM_SDIO_PROBE_ENABLE
 		up(&wifi_control_sem);
+#endif
 		return -ENOMEM;
 	}
 
@@ -949,15 +953,17 @@ static int ath6kl_sdio_probe(struct platform_device *pdev)
 			mdelay(500);
 		}
 	}
-
+#ifdef MSM_SDIO_PROBE_ENABLE
 	up(&wifi_control_sem);
+#endif
 	return ret;
 
 err:
 	if (pdata != NULL)
 		devm_kfree(dev, pdata);
-
+#ifdef MSM_SDIO_PROBE_ENABLE
 	up(&wifi_control_sem);
+#endif
 	return -EINVAL;
 }
 
@@ -992,8 +998,9 @@ static int ath6kl_sdio_remove(struct platform_device *pdev)
 	}
 
 
-
+#ifdef MSM_SDIO_PROBE_ENABLE
 	up(&wifi_control_sem);
+#endif
 	return 0;
 }
 
@@ -1017,17 +1024,21 @@ void ath6kl_sdio_init_msm(void)
 {
 	int ret;
 
+#ifdef MSM_SDIO_PROBE_ENABLE
 	sema_init(&wifi_control_sem, 1);
 	down(&wifi_control_sem);
+#endif
 
 	ret = platform_driver_register(&ath6kl_sdio_device);
 
+#ifdef MSM_SDIO_PROBE_ENABLE
 	/* Waiting callback after platform_driver_register */
 	if (down_timeout(&wifi_control_sem,  msecs_to_jiffies(5000)) != 0) {
 		ret = -EINVAL;
 		printk(KERN_INFO "platform_driver_register timeout\n");
 		return;
 	}
+#endif
 
 	return;
 }
@@ -1036,11 +1047,13 @@ void ath6kl_sdio_exit_msm(void)
 {
 	platform_driver_unregister(&ath6kl_sdio_device);
 
+#ifdef MSM_SDIO_PROBE_ENABLE
 	/* Waiting callback after platform_driver_register */
 	if (down_timeout(&wifi_control_sem,  msecs_to_jiffies(5000)) != 0) {
 		printk(KERN_INFO "platform_driver_unregister timeout\n");
 		return;
 	}
+#endif
 }
 
 #endif /* #ifdef ATH6KL_BUS_VOTE */

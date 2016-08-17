@@ -1950,6 +1950,11 @@ struct wlan_wow_stats {
 	u8 wow_host_evt_wakeups;
 } __packed;
 
+struct wmi_target_tx_rate_stats {
+    u16 tx_retry_ratio;
+    u16 tx_total_fifo_depth;
+} __packed;
+
 struct wmi_target_stats {
 	__le32 lq_val;
 	a_sle32 noise_floor_calib;

@@ -29,6 +29,7 @@
 #include "hif-ops.h"
 #include "htc-ops.h"
 #include "rttapi.h"
+#include "ath_netlink.h"
 #ifdef ATH6KL_DIAGNOSTIC
 #include "diagnose.h"
 #endif
@@ -1189,6 +1190,8 @@ void ath6kl_core_cleanup(struct ath6kl *ar)
 	ath6kl_deinit_ieee80211_hw(ar);
 
 	rttm_free();
+
+	ath_nlapi_free();
 }
 
 /* firmware upload */
@@ -2837,6 +2840,7 @@ static int __ath6kl_init_hw_start(struct ath6kl *ar)
 		}
 
 		rttm_init(ar);
+		ath_nlapi_init(ar);
 		/* communicate the wmi protocol verision to the target */
 		/* FIXME: return error */
 		if ((ath6kl_set_host_app_area(ar)) != 0)
@@ -2906,6 +2910,7 @@ static int __ath6kl_init_hw_stop(struct ath6kl *ar)
 		ath6kl_warn("failed to power off hif: %d\n", ret);
 
 	rttm_free();
+	ath_nlapi_free();
 	return 0;
 }
 

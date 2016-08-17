@@ -25,6 +25,7 @@
 #include "ieee80211_ioctl.h"
 #include "ce_athtst.h"
 #endif
+#include "ath_netlink.h"
 
 #ifndef ACS_SUPPORT
 #define ACS_SUPPORT
@@ -2503,6 +2504,11 @@ static void ath6kl_add_le32(__le32 *var, __le32 val)
 	*var = cpu_to_le32(le32_to_cpu(*var) + le32_to_cpu(val));
 }
 
+extern struct athnl_ap_status ath_ap_status;
+static const s32 rate_tbl_ar6004[28] = {1000, 2000, 5500, 11000,
+                                        6000, 9000, 12000, 18000, 24000, 36000, 48000, 54000,
+                                        6500, 13000, 19500, 26000, 39000, 52000, 58500, 65000,
+                                        13000, 26000, 39000, 52000, 78000, 104000, 117000, 130000};
 void ath6kl_tgt_stats_event(struct ath6kl_vif *vif, u8 *ptr, u32 len)
 {
 	struct wmi_ap_mode_stat *p = (struct wmi_ap_mode_stat *) ptr;
@@ -2510,9 +2516,12 @@ void ath6kl_tgt_stats_event(struct ath6kl_vif *vif, u8 *ptr, u32 len)
 	struct wmi_per_sta_stat *st_ap, *st_p;
 	u8 ac, slot;
 	u16 updated = 0;
+	unsigned long the_lastest_txrx_time = 0;
 
 	if (vif->nw_type == AP_NETWORK) {
 		if ((len + 4) >= sizeof(*p)) {
+			struct wmi_target_tx_rate_stats *tgt_tx_rate_stats =
+					(struct wmi_target_tx_rate_stats *) (ptr + (len - 4));
 			for (ac = 0; ac < AP_MAX_NUM_STA; ac++) {
 				st_p = &p->sta[ac];
 
@@ -2550,8 +2559,15 @@ void ath6kl_tgt_stats_event(struct ath6kl_vif *vif, u8 *ptr, u32 len)
 							st_p->tx_ucast_rate;
 					st_ap->last_txrx_time =
 					le16_to_cpu(st_p->last_txrx_time);
+					if (st_ap->last_txrx_time > the_lastest_txrx_time) {
+						the_lastest_txrx_time = st_ap->last_txrx_time;
+						ath_ap_status.tx_ucast_rate = rate_tbl_ar6004[st_ap->tx_ucast_rate];
+					}
 				}
 			}
+
+			ath_ap_status.tx_retry_ratio = tgt_tx_rate_stats->tx_retry_ratio;
+			ath_ap_status.tx_total_fifo_depth = tgt_tx_rate_stats->tx_total_fifo_depth;
 		}
 	} else {
 		ath6kl_update_target_stats(vif, ptr, len);

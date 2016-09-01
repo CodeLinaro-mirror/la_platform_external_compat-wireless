@@ -41,7 +41,6 @@ void ieee80211_acs_construct_chan_list(struct wiphy *wiphy,
         struct ieee80211_supported_band *sband;
         int i;
 
-	ath6kl_err("FHQ into main.c %s\n", __func__);
         /* reset channel mapping array */
         memset(&acs->acs_chan_maps, 0xff, sizeof(acs->acs_chan_maps));
         memset(&acs->acs_chan_maxrssi,0x0, sizeof(acs->acs_chan_maxrssi));
@@ -88,7 +87,6 @@ static void acs_flush_bss_info(struct acs *acs)
 {
         struct acs_bss_info *acs_bss, *tmp;
 
-	ath6kl_err("FHQ into main.c %s\n", __func__);
         spin_lock(&acs->bss_info_lock);
 
         list_for_each_entry_safe(acs_bss, tmp, &acs->bss_info_list, list) {
@@ -134,7 +132,6 @@ void ath6kl_acs_deinit(struct ath6kl_vif *vif)
 {
         struct acs *acs = vif->acs_ctx;
 
-	ath6kl_err("FHQ into main.c %s\n", __func__);
         if (acs) {
                 acs_flush_bss_info(acs);
 
@@ -158,9 +155,7 @@ void ath6kl_acs_bss_info(struct ath6kl_vif *vif,
         struct acs *acs = vif->acs_ctx;
         struct acs_bss_info *acs_bss, *tmp;
         int match = 0;
-	ath6kl_err("FHQ %s \n", __func__);
         if (!acs->acs_need_active){
-	ath6kl_err("FHQ %s !acs->acs_need_active return, donot do anything\n", __func__);
                 return;}
 
         /* Add bss even scan not issue by htcoex. */
@@ -220,7 +215,6 @@ int ath6kl_acs_scan_complete_event(struct ath6kl_vif *vif, bool aborted)
         struct acs *acs = vif->acs_ctx;
         int ret = 0;
 
-	ath6kl_err("FHQ into main.c %s\n", __func__);
         if (!acs->acs_need_active)
                 return ret;
 
@@ -1099,18 +1093,14 @@ void ath6kl_bss_post_proc_deinit(struct ath6kl_vif *vif)
 void ath6kl_bss_post_proc_bss_scan_start(struct ath6kl_vif *vif)
 {
 	struct bss_post_proc *post_proc = vif->bss_post_proc_ctx;
-	ath6kl_err("FHQ %s \n", __func__);
 
 	if (!post_proc){
-	ath6kl_err("FHQ %s !post_proc return donot do anything\n", __func__);
 		return;}
 
 	/* Always flush old bss_info before start a new scan. */
 	if (post_proc->flags & ATH6KL_BSS_POST_PROC_CACHED_BSS){
-	ath6kl_err("FHQ %s ATH6KL_BSS_POST_PROC_CACHED_BSS invoke bss_proc_post_flush(post_proc, false)\n", __func__);
 		bss_proc_post_flush(post_proc, false);}
 	else{
-	ath6kl_err("FHQ %s invoke bss_proc_post_flush(post_proc, true)\n", __func__);
 		bss_proc_post_flush(post_proc, true);}
 
 	set_bit(BSS_POST_PROC_SCAN_ONGOING, &post_proc->stat);
@@ -1127,7 +1117,6 @@ int ath6kl_bss_post_proc_bss_complete_event(struct ath6kl_vif *vif)
 	struct bss_info_entry *bss_info, *tmp;
 	struct cfg80211_bss *bss;
 	int cnt = 0;
-	ath6kl_err("FHQ %s \n", __func__);
 
 	if (!post_proc)
 		return 0;
@@ -2233,12 +2222,10 @@ void ath6kl_scan_complete_evt(struct ath6kl_vif *vif, int status)
 	struct ath6kl *ar = vif->ar;
 	bool aborted = false;
 
-	ath6kl_err("FHQ %s \n", __func__);
 	if (status != WMI_SCAN_STATUS_SUCCESS)
 		aborted = true;
 #ifdef ACS_SUPPORT
 	/* FIXME : bad, may use call-back instead. */
-	ath6kl_err("FHQ %s #ifdef ACS_SUPPORT invoke ath6kl_acs_scan_complete_event()\n", __func__);
 	ath6kl_acs_scan_complete_event(vif, aborted);
 #endif
 

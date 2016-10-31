@@ -3776,7 +3776,8 @@ static void alx_ipa_send_routine(struct work_struct *work)
 	if (alx_ipa->ipa_prod_rm_state != ALX_IPA_RM_GRANTED) {
           spin_unlock_bh(&alx_ipa->ipa_rm_state_lock);
           if (adpt->pendq_cnt > 0 && alx_ipa_rm_request(adpt) != 0 ) {
-	    pr_info("%s IPA RM resource not granted,return \n", __func__);
+	    if(printk_ratelimit())
+	      pr_info("%s IPA RM resource not granted,return \n", __func__);
             spin_unlock_bh(&adpt->flow_ctrl_lock);
             return;
           }
@@ -4269,6 +4270,14 @@ static void alx_ipa_tx_dp_cb(void *priv, enum ipa_dp_evt_type evt,
                 if (alx_ipa->ipa_rx_completion == 0 && adpt->pendq_cnt == 0) {
                   spin_unlock_bh(&alx_ipa->rm_ipa_lock);
                   alx_ipa_rm_try_release(adpt);
+                  /*Holding wakelock for 200 msec here will allow enough time for
+                  IPA Inactivity timer expiry(100msec) + IPA TAG process to complete
+                  before ALX tries to suspend. Starting Inactivity timer also helps
+                  improving UL throughput scenario as the resource will not be actually
+                  released till 100msec before which inactivity timer will be reset. This
+                  will resuce overhead caused by resource request and release during
+                  continous data transfer*/
+                  pm_wakeup_event(&adpt->pdev->dev, 200);
                 }
                 else
                    spin_unlock_bh(&alx_ipa->rm_ipa_lock);
@@ -4859,7 +4868,8 @@ static int alx_ipa_rm_try_release(struct alx_adapter *adpt)
         }
 
         spin_unlock_bh(&alx_ipa->rm_ipa_lock);
-		ret = ipa_rm_release_resource(IPA_RM_RESOURCE_ODU_ADAPT_PROD);
+		ret = ipa_rm_inactivity_timer_release_resource(
+                                       IPA_RM_RESOURCE_ODU_ADAPT_PROD);
         if (ret == 0){
           spin_lock_bh(&alx_ipa->rm_ipa_lock);
           alx_ipa->ipa_prod_rm_state = ALX_IPA_RM_RELEASED;

@@ -4301,6 +4301,14 @@ static void alx_ipa_tx_dl(void *priv, struct sk_buff *skb)
                 return;
         }
 
+        spin_lock_bh(&alx_ipa->ipa_rm_state_lock);
+        if (alx_ipa->ipa_prod_rm_state != ALX_IPA_RM_GRANTED) {
+          spin_unlock_bh(&alx_ipa->ipa_rm_state_lock);
+          alx_ipa_rm_request(adpt);
+        }
+        else
+          spin_unlock_bh(&alx_ipa->ipa_rm_state_lock);
+
 	pr_debug("%s %d SKB Send to line \n",__func__,__LINE__);
 	if ((ret = alx_start_xmit(skb, adpt->netdev)) != NETDEV_TX_OK)
 	{
@@ -4312,6 +4320,26 @@ static void alx_ipa_tx_dl(void *priv, struct sk_buff *skb)
 		/* Deliver SKB to HW */
 		alx_ipa->stats.tx_ipa_send++;
 	}
+        spin_lock_bh(&alx_ipa->rm_ipa_lock);
+        spin_lock_bh(&alx_ipa->ipa_rm_state_lock);
+        if (alx_ipa->ipa_rx_completion == 0 && adpt->pendq_cnt == 0
+            && alx_ipa->ipa_prod_rm_state != ALX_IPA_RM_RELEASED) {
+          spin_unlock_bh(&alx_ipa->ipa_rm_state_lock);
+          spin_unlock_bh(&alx_ipa->rm_ipa_lock);
+          alx_ipa_rm_try_release(adpt);
+          /*Holding wakelock for 200 msec here will allow enough time for
+            IPA Inactivity timer expiry(100msec) + IPA TAG process to complete
+            before ALX tries to suspend. Starting Inactivity timer also helps
+            improving UL throughput scenario as the resource will not be actually
+            released till 100msec before which inactivity timer will be reset. This
+            will resuce overhead caused by resource request and release during
+           continous data transfer*/
+           pm_wakeup_event(&adpt->pdev->dev, 200);
+         }
+         else{
+           spin_unlock_bh(&alx_ipa->ipa_rm_state_lock);
+           spin_unlock_bh(&alx_ipa->rm_ipa_lock);
+         }
 }
 
 static void alx_ipa_ready_cb(void *padpt)
@@ -4822,7 +4850,6 @@ static int alx_ipa_rm_request(struct alx_adapter *adpt)
 			alx_ipa_rm_state_to_str(alx_ipa->ipa_prod_rm_state));
 		return -EINVAL;
 	}
-	spin_unlock_bh(&alx_ipa->ipa_rm_state_lock);
 
 	ret = ipa_rm_inactivity_timer_request_resource(
 					IPA_RM_RESOURCE_ODU_ADAPT_PROD);
@@ -4840,15 +4867,14 @@ static int alx_ipa_rm_request(struct alx_adapter *adpt)
 		spin_unlock_bh(&alx_ipa->rm_ipa_lock);
 		ret = -EINPROGRESS;
 	} else if (ret == 0) {
-		spin_lock_bh(&alx_ipa->ipa_rm_state_lock);
 		alx_ipa->ipa_prod_rm_state = ALX_IPA_RM_GRANTED;
-		spin_unlock_bh(&alx_ipa->ipa_rm_state_lock);
 		pr_debug("%s - IPA RM PROD State state %s\n",__func__,
 			alx_ipa_rm_state_to_str(alx_ipa->ipa_prod_rm_state));
 	} else {
 		pr_err("%s -- IPA RM Request failed ret=%d\n",__func__, ret);
                 ret = -EINVAL;
 	}
+        spin_unlock_bh(&alx_ipa->ipa_rm_state_lock);
 	return ret;
 }
 
@@ -4859,22 +4885,13 @@ static int alx_ipa_rm_try_release(struct alx_adapter *adpt)
         struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
 
 	pr_debug("%s:%d \n",__func__,__LINE__);
-        spin_lock_bh(&alx_ipa->rm_ipa_lock);
-        if (alx_ipa->ipa_prod_rm_state == ALX_IPA_RM_RELEASED)
-        {
-          spin_unlock_bh(&alx_ipa->rm_ipa_lock);
-          pr_info("%s:RM state released; return \n",__func__);
-          return 0;
-        }
-
-        spin_unlock_bh(&alx_ipa->rm_ipa_lock);
-		ret = ipa_rm_inactivity_timer_release_resource(
+        spin_lock_bh(&alx_ipa->ipa_rm_state_lock);
+	ret = ipa_rm_inactivity_timer_release_resource(
                                        IPA_RM_RESOURCE_ODU_ADAPT_PROD);
         if (ret == 0){
-          spin_lock_bh(&alx_ipa->rm_ipa_lock);
           alx_ipa->ipa_prod_rm_state = ALX_IPA_RM_RELEASED;
-          spin_unlock_bh(&alx_ipa->rm_ipa_lock);
         }
+        spin_unlock_bh(&alx_ipa->ipa_rm_state_lock);
         return ret;
 }
 #endif

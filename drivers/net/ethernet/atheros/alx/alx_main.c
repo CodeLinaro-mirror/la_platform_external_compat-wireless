@@ -3481,6 +3481,15 @@ static struct net_device_stats *alx_get_stats(struct net_device *netdev)
 	return &netdev->stats;
 }
 
+/* Resize the descriptor rings */
+int alx_resize_rings(struct net_device *netdev)
+{
+	/* close and then re-open interface */
+	alx_stop(netdev);
+	return alx_open(netdev);
+}
+
+
 #ifdef ALX_LINK_DOWN_CONFIG
 static int alx_link_mac_restore(struct alx_adapter *adpt)
 {

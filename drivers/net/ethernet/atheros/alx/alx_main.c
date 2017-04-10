@@ -1120,6 +1120,11 @@ static bool alx_handle_rx_irq(struct alx_msix_param *msix,
 		skb->protocol = eth_type_trans(skb, adpt->netdev);
 #endif
 		skb_checksum_none_assert(skb);
+
+		/*the HW rrd->vlan_flag is still true when vlan stripping disabled, correct it here */
+		if (!CHK_HW_FLAG(VLANSTRIP_EN))
+			srrd.genr.vlan_flag = false;
+
 #ifdef	MDM_PLATFORM
                 alx_receive_skb_ipa(adpt, skb, (u16)srrd.genr.vlan_tag,
 					(bool)srrd.genr.vlan_flag,

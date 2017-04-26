@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2016, The Linux Foundation. All rights reserved. */
+/* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved. */
 /*
  * Copyright (c) 2012 Qualcomm Atheros, Inc.
  *
@@ -22,6 +22,14 @@
 #ifdef MDM_PLATFORM
 #include <linux/debugfs.h>
 #include <linux/pm_wakeup.h>
+#endif
+
+#ifdef APQ_PLATFORM
+#include <linux/platform_device.h>
+#include <asm/dma-iommu.h>
+#define ALX_SMMU_BASE       0x10000000 /* Device address range base */
+#define ALX_SMMU_SIZE       ((SZ_1G * 4ULL) - ALX_SMMU_BASE)
+struct dma_iommu_mapping *alx_mapping;
 #endif
 
 char alx_drv_name[] = "alx";
@@ -582,7 +590,8 @@ static void alx_receive_skb(struct alx_adapter *adpt,
 		u16 vlan;
 		ALX_TAG_TO_VLAN(vlan_tag, vlan);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
-                __vlan_hwaccel_put_tag(skb, skb->vlan_proto, vlan);
+		/*alx MAC only recognize ETH_P_8021Q*/
+                __vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), vlan);
 #else
                 __vlan_hwaccel_put_tag(skb, vlan);
 #endif
@@ -610,7 +619,7 @@ static void alx_receive_skb_ipa(struct alx_adapter *adpt,
 		u16 vlan;
 		ALX_TAG_TO_VLAN(vlan_tag, vlan);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
-                __vlan_hwaccel_put_tag(skb, skb->vlan_proto, vlan);
+                __vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), vlan);
 #else
 		__vlan_hwaccel_put_tag(skb, vlan);
 #endif
@@ -1119,6 +1128,11 @@ static bool alx_handle_rx_irq(struct alx_msix_param *msix,
 		skb->protocol = eth_type_trans(skb, adpt->netdev);
 #endif
 		skb_checksum_none_assert(skb);
+
+		/*the HW rrd->vlan_flag is still true when vlan stripping disabled, correct it here */
+		if (!CHK_HW_FLAG(VLANSTRIP_EN))
+			srrd.genr.vlan_flag = false;
+
 #ifdef	MDM_PLATFORM
                 alx_receive_skb_ipa(adpt, skb, (u16)srrd.genr.vlan_tag,
 					(bool)srrd.genr.vlan_flag,
@@ -1860,7 +1874,6 @@ static void alx_free_irq(struct alx_adapter *adpt)
 	}
 }
 
-
 static void alx_vlan_mode(struct net_device *netdev,
 			  netdev_features_t features)
 {
@@ -1881,6 +1894,7 @@ static void alx_vlan_mode(struct net_device *netdev,
 		/* disable VLAN tag insert/strip */
 		CLI_HW_FLAG(VLANSTRIP_EN);
 	}
+
 	hw->cbs.config_mac_ctrl(hw);
 
 	if (!CHK_ADPT_FLAG(1, STATE_DOWN))
@@ -2979,6 +2993,7 @@ static int alx_set_features(struct net_device *netdev,
 	if (changed & NETIF_F_HW_VLAN_RX)
 #endif /*(LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))*/
 		alx_vlan_mode(netdev, features);
+
 	return 0;
 }
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)) */
@@ -3312,7 +3327,7 @@ static int alx_shutdown_internal(struct pci_dev *pdev, bool *wakeup)
 		return retval;
 
 	*wakeup = wufc ? true : false;
-	pci_disable_device(pdev);
+	pci_clear_master(pdev);
 	return 0;
 }
 
@@ -3345,8 +3360,10 @@ static int alx_suspend(struct device *dev)
 	if (retval)
 		return retval;
 
+#ifndef APQ_PLATFORM
 	if(alx_ipa_rm_try_release(adpt))
 		pr_err("%s -- ODU PROD Release unsuccessful \n",__func__);
+#endif
 
 	if (wakeup) {
 		pci_prepare_to_sleep(pdev);
@@ -3529,6 +3546,7 @@ static int alx_link_mac_restore(struct alx_adapter *adpt)
 }
 #endif
 
+#ifndef APQ_PLATFORM
 static int alx_ipa_set_perf_level(void)
 {
 	struct ipa_rm_perf_profile profile;
@@ -3562,6 +3580,7 @@ static int alx_ipa_set_perf_level(void)
 	alx_ipa->alx_ipa_perf_requested = true;
 	return ret;
 }
+#endif
 
 static void alx_link_task_routine(struct alx_adapter *adpt)
 {
@@ -3569,7 +3588,9 @@ static void alx_link_task_routine(struct alx_adapter *adpt)
 	struct alx_hw *hw = &adpt->hw;
 	char *link_desc;
 	int ret = 0;
+#ifndef APQ_PLATFORM
 	struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
+#endif
 
 	if (!CHK_ADPT_FLAG(0, TASK_LSC_REQ))
 		return;
@@ -3740,6 +3761,7 @@ static void alx_task_routine(struct work_struct *work)
 	CLI_ADPT_FLAG(1, STATE_WATCH_DOG);
 }
 
+#ifndef APQ_PLATFORM
 /*
  * alx_ipa_send_routine - Sends packets to IPA/ODU bridge Driver
  * Scheduled on RX of IPA_WRITE_DONE Event
@@ -3825,6 +3847,7 @@ static void alx_ipa_send_routine(struct work_struct *work)
 	/* Release PROD if we dont have any more data to send*/
 	spin_unlock_bh(&adpt->flow_ctrl_lock);
 }
+#endif
 
 /* Calculate the transmit packet descript needed*/
 static bool alx_check_num_tpdescs(struct alx_tx_queue *txque,
@@ -4047,15 +4070,18 @@ static netdev_tx_t alx_start_xmit_frame(struct alx_adapter *adpt,
 		dev_kfree_skb_any(skb);
 		return NETDEV_TX_OK;
 	}
-
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,4,0))
+	if (unlikely(skb_vlan_tag_present(skb))) {
+		u16 vlan = skb_vlan_tag_get(skb);
+#else
 	if (unlikely(vlan_tx_tag_present(skb))) {
 		u16 vlan = vlan_tx_tag_get(skb);
+#endif
 		u16 tag;
 		ALX_VLAN_TO_TAG(vlan, tag);
 		stpd.genr.vlan_tag = tag;
 		stpd.genr.instag = 0x1;
 	}
-
 	if (skb_network_offset(skb) != ETH_HLEN)
 		stpd.genr.type = 0x1; /* Ethernet frame */
 
@@ -4905,6 +4931,68 @@ static int alx_ipa_rm_try_release(struct alx_adapter *adpt)
 }
 #endif
 
+
+#ifdef APQ_PLATFORM
+int alx_smmu_init(struct device *dev)
+{
+	int retval = 0;
+	int alx_atomic_ctx = 1;
+	int alx_bypass = 1;
+
+	pr_info("[APQ] alx_smmu_init\n");
+	alx_mapping = arm_iommu_create_mapping(&platform_bus_type, ALX_SMMU_BASE, ALX_SMMU_SIZE);
+
+	if (IS_ERR_OR_NULL(alx_mapping)) {
+		retval = PTR_ERR(alx_mapping) ?: -ENODEV;
+		pr_err("Failed to create ALX SMMU mapping (%d)\n", retval);
+		return retval;
+	}
+
+	retval = iommu_domain_set_attr(alx_mapping->domain,
+				   DOMAIN_ATTR_ATOMIC,
+				   &alx_atomic_ctx);
+	if (retval) {
+		pr_err("Set atomic attribute for ALX SMMU failed (%d)\n", retval);
+		goto release_alx_mapping;
+	}
+
+	retval = iommu_domain_set_attr(alx_mapping->domain,
+				   DOMAIN_ATTR_S1_BYPASS,
+				   &alx_bypass);
+	if (retval) {
+		pr_err("Set bypass attribute for ALX SMMU failed (%d)\n", retval);
+		goto release_alx_mapping;
+	}
+
+	retval = arm_iommu_attach_device(dev, alx_mapping);
+	if (retval) {
+		pr_err("arm_iommu_attach_device for ALX failed (%d)\n", retval);
+		goto release_alx_mapping;
+	}
+
+	pr_info("attached to SMMU successful\n");
+
+	return retval;
+
+release_alx_mapping:
+	arm_iommu_release_mapping(alx_mapping);
+	alx_mapping = NULL;
+
+	return retval;
+};
+
+void alx_smmu_remove(struct device *dev)
+{
+    if (alx_mapping)
+    {
+	pr_info("[APQ] alx_smmu_remove\n");
+	arm_iommu_detach_device(dev);
+	arm_iommu_release_mapping(alx_mapping);
+	alx_mapping = NULL;
+    }
+}
+#endif
+
 /*
  * alx_init - Device Initialization Routine
  */
@@ -4919,8 +5007,19 @@ static int __devinit alx_init(struct pci_dev *pdev,
 #endif
 	static int cards_found;
 	int retval;
+
+#ifdef APQ_PLATFORM
+	retval = alx_smmu_init(&pdev->dev);
+	if (retval) {
+	    pr_err("%s: ALX SMMU init failed, err = %d\n", __func__, retval);
+	    goto alx_smmu_init_fail;
+	}
+#endif
+
+#ifndef APQ_PLATFORM
         struct odu_bridge_params *params_ptr, params;
         params_ptr = &params;
+#endif
 
 #ifdef MDM_PLATFORM
 	retval = msm_pcie_pm_control(MSM_PCIE_RESUME, pdev->bus->number,
@@ -5064,7 +5163,11 @@ static int __devinit alx_init(struct pci_dev *pdev,
 #ifdef MDM_PLATFORM
        netdev->netdev_ops = &alx_netdev_ops;
 #else
+#ifndef APQ_PLATFORM
 	netdev_attach_ops(netdev, &alx_netdev_ops);
+#else
+       netdev->netdev_ops = &alx_netdev_ops;
+#endif
 #endif
 	alx_set_ethtool_ops(netdev);
 	netdev->watchdog_timeo = ALX_WATCHDOG_TIME;
@@ -5382,6 +5485,7 @@ err_alloc_pci_res_mem:
 err_alloc_device:
 	dev_err(&pdev->dev,
 		"error when probe device, error = %d\n", retval);
+alx_smmu_init_fail:
 	return retval;
 }
 
@@ -5475,6 +5579,10 @@ static void __devexit alx_remove(struct pci_dev *pdev)
 		 pr_err("Couldnt Suspend PCIe MSM Link %d \n",
 				retval);
 #endif
+
+#ifdef APQ_PLATFORM
+	alx_smmu_remove(&pdev->dev);
+#endif
 }
 
 
@@ -5555,8 +5663,12 @@ static struct pci_error_handlers alx_err_handler = {
 static SIMPLE_DEV_PM_OPS(alx_pm_ops, alx_suspend, alx_resume);
 #define ALX_PM_OPS (&alx_pm_ops)
 #ifndef MDM_PLATFORM
+
+#ifndef APQ_PLATFORM
 compat_pci_suspend(alx_suspend)
 compat_pci_resume(alx_resume)
+#endif
+
 #endif
 #else
 #define ALX_PM_OPS      NULL
@@ -5585,7 +5697,6 @@ static int __init alx_init_module(void)
 
 	printk(KERN_INFO "%s\n", alx_drv_description);
 	/* printk(KERN_INFO "%s\n", "-----ALX_V1.0.0.2-----"); */
-
 	retval = pci_register_driver(&alx_driver);
 
 	return retval;
@@ -5596,7 +5707,6 @@ module_init(alx_init_module);
 static void __exit alx_exit_module(void)
 {
 	pci_unregister_driver(&alx_driver);
-
 }
 
 

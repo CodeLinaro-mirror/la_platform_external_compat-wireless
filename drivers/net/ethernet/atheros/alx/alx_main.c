@@ -27,6 +27,7 @@
 #ifdef APQ_PLATFORM
 #include <linux/platform_device.h>
 #include <asm/dma-iommu.h>
+#include <linux/iommu.h>
 #define ALX_SMMU_BASE       0x10000000 /* Device address range base */
 #define ALX_SMMU_SIZE       ((SZ_1G * 4ULL) - ALX_SMMU_BASE)
 struct dma_iommu_mapping *alx_mapping;

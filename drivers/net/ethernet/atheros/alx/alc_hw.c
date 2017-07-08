@@ -382,9 +382,9 @@ u16 l1c_reset_pcie(struct alx_hw *hw, bool l0s_en, bool l1_en)
 
 	/* Workaround for PCI problem when BIOS sets MMRBC incorrectly. */
 	alx_cfg_r16(hw, PCI_COMMAND, &val16);
-	if ((val16 & (PCI_COMMAND_IO |
-		      PCI_COMMAND_MEMORY |
-		      PCI_COMMAND_MASTER)) == 0 ||
+	if (((val16 & PCI_COMMAND_IO) &&
+	     (val16 & PCI_COMMAND_MEMORY) &&
+	     (val16 & PCI_COMMAND_MASTER)) == 0 ||
 	    (val16 & PCI_COMMAND_INTX_DISABLE) != 0) {
 		val16 = (u16)((val16 | (PCI_COMMAND_IO |
 					PCI_COMMAND_MEMORY |

@@ -1,5 +1,5 @@
 LOCAL_PATH := $(call my-dir)
-ifeq ($(call is-android-codename,JELLY_BEAN),true)
+ifeq ($(call is-platform-sdk-version-at-least,16),true)
 	DLKM_DIR := $(TOP)/device/qcom/common/dlkm
 else
 	DLKM_DIR := build/dlkm
@@ -27,6 +27,10 @@ endif
 ifeq ($(BOARD_HAS_ATH_ETH_ALX), true)
 
 export BUILD_ATH_ETH_ALX=1
+BOARD_PLATFORM_LIST := apq8098_latv
+ifeq ($(call is-board-platform-in-list,$(BOARD_PLATFORM_LIST)),true)
+export BUILD_APQ_PLATFORM=1
+endif
 
 include $(CLEAR_VARS)
 LOCAL_MODULE             := compat.ko
@@ -38,7 +42,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE             := alx.ko
 LOCAL_MODULE_KBUILD_NAME := eth.ko
 LOCAL_MODULE_TAGS        := optional debug
-LOCAL_MODULE_PATH        := $(TARGET_OUT)/lib/modules/alx
+LOCAL_MODULE_PATH        := $(TARGET_OUT)/lib/modules/
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
 endif

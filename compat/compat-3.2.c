@@ -1,3 +1,4 @@
+/* Copyright (c) 2017, The Linux Foundation. All rights reserved. */
 /*
  * Copyright 2012  Luis R. Rodriguez <mcgrof@frijolero.org>
  *
@@ -15,11 +16,11 @@
 int __netdev_printk(const char *level, const struct net_device *dev,
 			   struct va_format *vaf)
 {
-	int r;
+	int r = 0;
 
 	if (dev && dev->dev.parent)
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35))
-		r = dev_printk(level, dev->dev.parent, "%s: %pV",
+		dev_printk(level, dev->dev.parent, "%s: %pV",
 			       netdev_name(dev), vaf);
 #else
 		/* XXX: this could likely be done better but I'm lazy */

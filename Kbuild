@@ -102,7 +102,9 @@ ccflags-y += -D__CHECK_ENDIAN__
 endif
 
 ifeq ($(BUILD_ATH_ETH_ALX), 1)
-
+ifeq ($(BUILD_APQ_PLATFORM), 1)
+ccflags-y += -DAPQ_PLATFORM
+endif
 obj-m += eth.o
 eth-y += drivers/net/ethernet/atheros/alx/alx_main.o
 eth-y += drivers/net/ethernet/atheros/alx/alx_ethtool.o
@@ -123,7 +125,7 @@ EXTRA_CFLAGS += \
         -DCOMPAT_PROJECT="\"Compat-wireless\"" \
         -DCOMPAT_VERSION="\"$(shell cat $(PWD)/$(src)/compat_version)\""
 
-ccflags-y += -I../external/compat-wireless/include
+ccflags-y += -I../../external/compat-wireless/include
 ccflags-y += -include include/linux/compat-2.6.h
 ccflags-y += -include ../../$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include/linux/version.h
 

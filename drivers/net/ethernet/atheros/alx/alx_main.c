@@ -3198,7 +3198,9 @@ err_alloc_rtx:
 static int alx_stop(struct net_device *netdev)
 {
 	struct alx_adapter *adpt = netdev_priv(netdev);
+#ifdef  MDM_PLATFORM
 	struct alx_ipa_rx_desc_node *node = NULL;
+#endif
 
 	if (CHK_ADPT_FLAG(1, STATE_RESETTING))
 		netif_warn(adpt, ifdown, adpt->netdev,
@@ -3588,8 +3590,8 @@ static void alx_link_task_routine(struct alx_adapter *adpt)
 	struct net_device *netdev = adpt->netdev;
 	struct alx_hw *hw = &adpt->hw;
 	char *link_desc;
-	int ret = 0;
 #ifndef APQ_PLATFORM
+	int ret = 0;
 	struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
 #endif
 
@@ -3686,9 +3688,8 @@ static void alx_link_task_routine(struct alx_adapter *adpt)
 		} else {
 			CLI_ADPT_FLAG(2, ODU_CONNECT);
 			adpt->palx_ipa->alx_ipa_perf_requested = false;
-			if(alx_ipa_rm_try_release(adpt))
-                           pr_err("%s -- ODU PROD Release unsuccessful \n",
-                                                                     __func__);
+			if (alx_ipa_rm_try_release(adpt))
+				pr_err("%s -- ODU PROD Release unsuccessful \n",__func__);
 		}
 #endif
 	}
@@ -3804,7 +3805,7 @@ static void alx_ipa_send_routine(struct work_struct *work)
 		return;
 	}
 
-        spin_lock_bh(&alx_ipa->ipa_rm_state_lock);
+    spin_lock_bh(&alx_ipa->ipa_rm_state_lock);
 	if (alx_ipa->ipa_prod_rm_state != ALX_IPA_RM_GRANTED) {
           spin_unlock_bh(&alx_ipa->ipa_rm_state_lock);
           if (adpt->pendq_cnt > 0 && alx_ipa_rm_request(adpt) != 0 ) {
@@ -5138,7 +5139,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
 	{
 		if (alx_ipa_setup_rm(adpt)) {
 			pr_err("ALX: IPA Setup RM Failed \n");
-                        goto err_ipa_rm;
+			goto err_ipa_rm;
 		} else {
 			SET_ADPT_FLAG(2, IPA_RM);
 		}
@@ -5462,17 +5463,21 @@ static int __devinit alx_init(struct pci_dev *pdev,
 	cards_found++;
 	return 0;
 
+#ifdef MDM_PLATFORM
 msm_pcie_register_fail:
 err_init_odu_bridge:
 	unregister_netdev(netdev);
 	adpt->netdev_registered = false;
+#endif
 err_register_netdev:
 	alx_free_all_rtx_queue(adpt);
 err_alloc_rtx_queue:
 	alx_reset_interrupt_param(adpt);
 err_set_interrupt_param:
 	alx_reset_interrupt_mode(adpt);
+#ifdef MDM_PLATFORM
 err_ipa_rm:
+#endif
 err_set_interrupt_mode:
 err_init_adapter:
 	iounmap(adpt->hw.hw_addr);
@@ -5499,7 +5504,9 @@ static void __devexit alx_remove(struct pci_dev *pdev)
 	struct alx_adapter *adpt = pci_get_drvdata(pdev);
 	struct alx_hw *hw = &adpt->hw;
 	struct net_device *netdev = adpt->netdev;
+#ifdef MDM_PLATFORM
 	int retval = 0;
+#endif
 
 #ifdef ALX_HIB_TIMER_CONFIG
 	del_timer_sync(&adpt->alx_timer);

@@ -594,6 +594,26 @@ static int alx_get_sset_count(struct net_device *netdev, int sset)
 	break;
 	}
 }
+static void alx_get_ringparam( struct net_device *netdev, struct ethtool_ringparam *ring)
+{
+       struct alx_adapter *adpt = netdev_priv(netdev);
+       ring->rx_pending = adpt->num_rxdescs;
+       ring->tx_pending = adpt->num_txdescs;
+       return;
+}
+
+static int alx_set_ringparam(struct net_device *netdev, struct ethtool_ringparam *ring)
+{
+        struct alx_adapter *adpt = netdev_priv(netdev);
+        int retval = 0;
+
+        adpt->num_txdescs = clamp_t(u32, ring->tx_pending,MIN_TX_DESC,MAX_TX_DESC);
+        adpt->num_rxdescs = clamp_t(u32, ring->rx_pending,MIN_TX_DESC,MAX_TX_DESC);
+        if (netif_running(netdev))
+               retval = alx_resize_rings(netdev);
+        return retval;
+}
+
 
 static const struct ethtool_ops alx_ethtool_ops = {
 	.get_settings      = alx_get_settings,
@@ -613,6 +633,8 @@ static const struct ethtool_ops alx_ethtool_ops = {
 	.get_eeprom        = alx_get_eeprom,
 	.set_eeprom        = alx_set_eeprom,
 	.get_strings       = alx_get_strings,
+        .get_ringparam     = alx_get_ringparam,
+	.set_ringparam     = alx_set_ringparam,
 	.get_ethtool_stats = alx_get_ethtool_stats,
 	.get_sset_count    = alx_get_sset_count,
 };

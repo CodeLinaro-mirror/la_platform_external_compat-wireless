@@ -60,13 +60,14 @@
 #define ALX_LINK_DOWN_CONFIG 1
 #define ALX_HIB_TASK_CONFIG  1
 #define ALX_HIB_TIMER_CONFIG 1
-
+#define MIN_TX_DESC 128
+#define MAX_TX_DESC 1024
 #ifdef MDM_PLATFORM
 #define MAX_AR8151_BW 900
 #define ALX_IPA_SYS_PIPE_MAX_PKTS_DESC 200
 #define ALX_IPA_SYS_PIPE_MIN_PKTS_DESC 5
 #define ALX_IPA_SYS_PIPE_DNE_PKTS ALX_IPA_SYS_PIPE_MAX_PKTS_DESC*3
-#define ALX_IPA_INACTIVITY_DELAY_MS 1000
+#define ALX_IPA_INACTIVITY_DELAY_MS 100
 /* Protocol Specific Offsets*/
 #define ALX_IP_OFFSET       14
 #define ALX_IP_HEADER_SIZE  20
@@ -909,6 +910,7 @@ extern char alx_drv_name[];
 extern void alx_reinit_locked(struct alx_adapter *adpt);
 extern void alx_set_ethtool_ops(struct net_device *netdev);
 extern void alx_update_hw_stats(struct alx_adapter *adpt);
+int alx_resize_rings(struct net_device *netdev);
 #ifdef ETHTOOL_OPS_COMPAT
 extern int ethtool_ioctl(struct ifreq *ifr);
 #endif

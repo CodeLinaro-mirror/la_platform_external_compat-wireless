@@ -19,9 +19,12 @@ int __netdev_printk(const char *level, const struct net_device *dev,
 	int r = 0;
 
 	if (dev && dev->dev.parent)
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35))
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(4,0,0))
 		dev_printk(level, dev->dev.parent, "%s: %pV",
-			       netdev_name(dev), vaf);
+		   		netdev_name(dev), vaf);
+#elif (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35))
+		r = dev_printk(level, dev->dev.parent, "%s: %pV",
+				netdev_name(dev), vaf);
 #else
 		/* XXX: this could likely be done better but I'm lazy */
 		r = printk("%s%s: %pV", level, netdev_name(dev), vaf);

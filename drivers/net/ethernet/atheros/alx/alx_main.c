@@ -19,7 +19,7 @@
 #include "alx_hwcom.h"
 
 #include <linux/moduleparam.h>
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 #include <linux/debugfs.h>
 #include <linux/pm_wakeup.h>
 #endif
@@ -79,7 +79,7 @@ static int alx_open_internal(struct alx_adapter *adpt, u32 ctrl);
 static void alx_stop_internal(struct alx_adapter *adpt, u32 ctrl);
 static void alx_init_ring_ptrs(struct alx_adapter *adpt);
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 static int alx_ipa_rm_try_release(struct alx_adapter *adpt);
 static int alx_ipa_setup_rm(struct alx_adapter *adpt);
 
@@ -525,7 +525,7 @@ static void alx_config_rss(struct alx_adapter *adpt)
 		hw->cbs.config_rss(hw, CHK_ADPT_FLAG(0, SRSS_EN));
 }
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 static bool alx_ipa_is_non_ip_pkt(uint8_t proto)
 {
 	if ((proto == RRD_PROTO_NON_IP) ||
@@ -600,7 +600,7 @@ static void alx_receive_skb(struct alx_adapter *adpt,
 	netif_receive_skb(skb);
 }
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 /*
  * alx_receive_skb_ipa
  */
@@ -1125,7 +1125,7 @@ static bool alx_handle_rx_irq(struct alx_msix_param *msix,
 		}
 		alx_clean_rfdesc(rxque, &srrd);
 		skb_put(skb, srrd.genr.pkt_len - ETH_FCS_LEN);
-#ifndef	MDM_PLATFORM
+#ifdef	APQ_PLATFORM
 		skb->protocol = eth_type_trans(skb, adpt->netdev);
 #endif
 		skb_checksum_none_assert(skb);
@@ -1134,7 +1134,7 @@ static bool alx_handle_rx_irq(struct alx_msix_param *msix,
 		if (!CHK_HW_FLAG(VLANSTRIP_EN))
 			srrd.genr.vlan_flag = false;
 
-#ifdef	MDM_PLATFORM
+#ifndef	APQ_PLATFORM
                 alx_receive_skb_ipa(adpt, skb, (u16)srrd.genr.vlan_tag,
 					(bool)srrd.genr.vlan_flag,
 					(uint8_t)srrd.genr.proto);
@@ -1163,7 +1163,7 @@ static bool alx_handle_tx_irq(struct alx_msix_param *msix,
 	struct alx_hw *hw = &adpt->hw;
 	struct alx_buffer *tpbuf;
 	u16 consume_data;
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
 	int num_tx_comp = 0;
 #endif
@@ -1193,13 +1193,13 @@ static bool alx_handle_tx_irq(struct alx_msix_param *msix,
 		if (++txque->tpq.consume_idx == txque->tpq.count)
 			txque->tpq.consume_idx = 0;
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 		/* Update TX Completetion Recieved */
 		num_tx_comp++;
 #endif
 	}
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	/* Release Wakelock if all TX Completion is done */
 	spin_lock_bh(&alx_ipa->rm_ipa_lock);
 	alx_ipa->alx_tx_completion -= num_tx_comp;
@@ -2505,7 +2505,7 @@ static int __devinit alx_init_adapter(struct alx_adapter *adpt)
 	hw->intr_mask = ALX_IMR_NORMAL_MASK;
 	hw->smb_timer = 400; /* 400ms */
 	hw->mtu = adpt->netdev->mtu;
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	hw->imt = 500;       /* For MDM set it to 1ms */
 #else
 	hw->imt = 100;       /* set to 200us */
@@ -2800,7 +2800,7 @@ static void alx_free_rx_descriptor(struct alx_rx_queue *rxque)
 	}
 }
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 static int alx_alloc_flow_ctrl_desc(struct alx_adapter *adpt)
 {
 	int i;
@@ -3162,7 +3162,7 @@ static int alx_open(struct net_device *netdev)
 		goto err_alloc_rtx;
 	}
 
-#ifdef  MDM_PLATFORM
+#ifndef	APQ_PLATFORM
 	/* Allocate Nodes and List for storing flow control packets*/
 	retval = alx_alloc_flow_ctrl_desc(adpt);
 	if (retval) {
@@ -3181,7 +3181,7 @@ static int alx_open(struct net_device *netdev)
 
 err_open_internal:
 	alx_stop_internal(adpt, ALX_OPEN_CTRL_IRQ_EN);
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 err_alloc_flow_ctrl:
 	alx_free_flow_ctrl_desc(adpt);
 #endif
@@ -3198,7 +3198,7 @@ err_alloc_rtx:
 static int alx_stop(struct net_device *netdev)
 {
 	struct alx_adapter *adpt = netdev_priv(netdev);
-#ifdef  MDM_PLATFORM
+#ifndef	APQ_PLATFORM
 	struct alx_ipa_rx_desc_node *node = NULL;
 #endif
 
@@ -3209,7 +3209,7 @@ static int alx_stop(struct net_device *netdev)
 	alx_stop_internal(adpt, ALX_OPEN_CTRL_IRQ_EN |
 				ALX_OPEN_CTRL_RESET_MAC);
 	alx_free_all_rtx_descriptor(adpt);
-#ifdef  MDM_PLATFORM
+#ifndef	APQ_PLATFORM
 	/* Flush any pending packets */
 	pr_info("ALX - Flush %d Pending Packets \n", adpt->pendq_cnt);
 	spin_lock_bh(&adpt->flow_ctrl_lock);
@@ -3640,7 +3640,7 @@ static void alx_link_task_routine(struct alx_adapter *adpt)
 		netif_carrier_on(netdev);
 		netif_tx_wake_all_queues(netdev);
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 		/* Enable ODU Bridge */
 		if (alx_ipa->ipa_ready == true && CHK_ADPT_FLAG(2, ODU_INIT)) {
 			ret = odu_bridge_connect();
@@ -3680,7 +3680,7 @@ static void alx_link_task_routine(struct alx_adapter *adpt)
 #ifdef ALX_LINK_DOWN_CONFIG
 		alx_link_mac_restore(adpt);
 #endif
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 		/* Disable ODU Bridge */
 		ret = odu_bridge_disconnect();
 		if (ret) {
@@ -3805,7 +3805,7 @@ static void alx_ipa_send_routine(struct work_struct *work)
 		return;
 	}
 
-    spin_lock_bh(&alx_ipa->ipa_rm_state_lock);
+	spin_lock_bh(&alx_ipa->ipa_rm_state_lock);
 	if (alx_ipa->ipa_prod_rm_state != ALX_IPA_RM_GRANTED) {
           spin_unlock_bh(&alx_ipa->ipa_rm_state_lock);
           if (adpt->pendq_cnt > 0 && alx_ipa_rm_request(adpt) != 0 ) {
@@ -4042,7 +4042,7 @@ static netdev_tx_t alx_start_xmit_frame(struct alx_adapter *adpt,
 	struct alx_hw     *hw = &adpt->hw;
 	unsigned long     flags = 0;
 	union alx_sw_tpdesc stpd; /* normal*/
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
 #endif
 
@@ -4103,7 +4103,7 @@ static netdev_tx_t alx_start_xmit_frame(struct alx_adapter *adpt,
 
 	spin_unlock_irqrestore(&adpt->tx_lock, flags);
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	/* Hold on to the wake lock for TX Completion Event */
 	spin_lock_bh(&alx_ipa->rm_ipa_lock);
 	if (alx_ipa->acquire_wake_src == false) {
@@ -4253,7 +4253,7 @@ static const struct net_device_ops alx_netdev_ops = {
 #endif
 };
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 static void alx_ipa_tx_dp_cb(void *priv, enum ipa_dp_evt_type evt,
                 unsigned long data)
 {
@@ -5004,7 +5004,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
 	struct net_device *netdev;
 	struct alx_adapter *adpt = NULL;
 	struct alx_hw *hw = NULL;
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	struct alx_ipa_ctx *alx_ipa = NULL;
 #endif
 	static int cards_found;
@@ -5023,7 +5023,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
         params_ptr = &params;
 #endif
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	retval = msm_pcie_pm_control(MSM_PCIE_RESUME, pdev->bus->number,
 					pdev, NULL, 0);
 	if (retval) {
@@ -5084,7 +5084,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
 	netdev->irq  = pdev->irq;
 	adpt = netdev_priv(netdev);
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
         /* Init IPA Context */
         alx_ipa = kzalloc(sizeof(struct alx_ipa_ctx), GFP_KERNEL);
         if (!alx_ipa) {
@@ -5121,7 +5121,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
 	hw->adpt = adpt;
 	adpt->msg_enable = ALX_MSG_DEFAULT;
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	retval = ipa_register_ipa_ready_cb(alx_ipa_ready_cb, (void *)adpt);
 	if (retval < 0) {
 		if (retval == -EEXIST) {
@@ -5162,15 +5162,12 @@ static int __devinit alx_init(struct pci_dev *pdev,
 	netdev->base_addr = (unsigned long)adpt->hw.hw_addr;
 
 	/* set cb member of netdev structure*/
-#ifdef MDM_PLATFORM
-       netdev->netdev_ops = &alx_netdev_ops;
+#if defined(APQ_PLATFORM) || defined(MDM_PLATFORM)
+	netdev->netdev_ops = &alx_netdev_ops;
 #else
-#ifndef APQ_PLATFORM
 	netdev_attach_ops(netdev, &alx_netdev_ops);
-#else
-       netdev->netdev_ops = &alx_netdev_ops;
 #endif
-#endif
+
 	alx_set_ethtool_ops(netdev);
 	netdev->watchdog_timeo = ALX_WATCHDOG_TIME;
 	strlcpy(netdev->name, pci_name(pdev), sizeof(netdev->name) - 1);
@@ -5382,7 +5379,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
 	}
 	adpt->netdev_registered = true;
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	/* Initialize the ODU bridge driver now: odu_bridge_init()*/
 	if (alx_ipa->ipa_ready == true) {
 		params_ptr->netdev_name = netdev->name;
@@ -5463,7 +5460,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
 	cards_found++;
 	return 0;
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 msm_pcie_register_fail:
 err_init_odu_bridge:
 	unregister_netdev(netdev);
@@ -5475,7 +5472,7 @@ err_alloc_rtx_queue:
 	alx_reset_interrupt_param(adpt);
 err_set_interrupt_param:
 	alx_reset_interrupt_mode(adpt);
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 err_ipa_rm:
 #endif
 err_set_interrupt_mode:
@@ -5504,7 +5501,7 @@ static void __devexit alx_remove(struct pci_dev *pdev)
 	struct alx_adapter *adpt = pci_get_drvdata(pdev);
 	struct alx_hw *hw = &adpt->hw;
 	struct net_device *netdev = adpt->netdev;
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	int retval = 0;
 #endif
 
@@ -5536,7 +5533,7 @@ static void __devexit alx_remove(struct pci_dev *pdev)
 	netif_dbg(adpt, probe, adpt->netdev, "complete\n");
 	free_netdev(netdev);
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	if (CHK_ADPT_FLAG(2, ODU_CONNECT)) {
 		retval = odu_bridge_disconnect();
 		if (retval)
@@ -5577,7 +5574,7 @@ static void __devexit alx_remove(struct pci_dev *pdev)
 
 	pci_disable_device(pdev);
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	/* De-register with MSM PCIe PM framework */
 	msm_pcie_deregister_event(&adpt->msm_pcie_event);
 
@@ -5670,13 +5667,9 @@ static struct pci_error_handlers alx_err_handler = {
 #ifdef CONFIG_PM_SLEEP
 static SIMPLE_DEV_PM_OPS(alx_pm_ops, alx_suspend, alx_resume);
 #define ALX_PM_OPS (&alx_pm_ops)
-#ifndef MDM_PLATFORM
-
-#ifndef APQ_PLATFORM
+#if !defined(APQ_PLATFORM) && !defined(MDM_PLATFORM)
 compat_pci_suspend(alx_suspend)
 compat_pci_resume(alx_resume)
-#endif
-
 #endif
 #else
 #define ALX_PM_OPS      NULL

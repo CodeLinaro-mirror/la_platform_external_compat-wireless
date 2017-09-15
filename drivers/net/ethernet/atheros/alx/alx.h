@@ -40,7 +40,7 @@
 #include <linux/aer.h>
 #include <linux/version.h>
 #include <asm/byteorder.h>
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 #include <linux/ipa_odu_bridge.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0))
 #include <linux/msm_pcie.h>
@@ -62,7 +62,7 @@
 #define ALX_HIB_TIMER_CONFIG 1
 #define MIN_TX_DESC 128
 #define MAX_TX_DESC 1024
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 #define MAX_AR8151_BW 900
 #define ALX_IPA_SYS_PIPE_MAX_PKTS_DESC 200
 #define ALX_IPA_SYS_PIPE_MIN_PKTS_DESC 5
@@ -702,7 +702,7 @@ struct alx_msix_param {
 #define SET_MSIX_FLAG(_flag)    SET_FLAG(msix, MSIX, _flag)
 #define CLI_MSIX_FLAG(_flag)    CLI_FLAG(msix, MSIX, _flag)
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 /**
  *  * struct alx_ipa_stats - ALX - ODU_Bridge/IPA Stats
  *  * @send_msg: MSG Send to ODU_Bridge
@@ -849,7 +849,7 @@ struct alx_adapter {
 #endif
 
 	u16 msg_enable;
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 	unsigned long flags[3];
 #else
 	unsigned long flags[2];
@@ -879,7 +879,7 @@ struct alx_adapter {
 #define ALX_ADPT_FLAG_1_STATE_DIAG_RUNNING      0x00000010
 #define ALX_ADPT_FLAG_1_STATE_INACTIVE          0x00000020
 
-#ifdef MDM_PLATFORM
+#ifndef APQ_PLATFORM
 #define ALX_ADPT_FLAG_2_ODU_CONNECT             0x00000001
 #define ALX_ADPT_FLAG_2_IPA_RM                  0x00000002
 #define ALX_ADPT_FLAG_2_DEBUGFS_INIT            0x00000004

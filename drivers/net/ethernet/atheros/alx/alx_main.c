@@ -4413,17 +4413,17 @@ static void alx_ipa_tx_dl(void *priv, struct sk_buff *skb)
          }
 }
 
-static void alx_ipa_ready_cb(void *padpt)
+static void alx_ipa_ready_work(struct work_struct *work)
 {
-        struct alx_adapter *adpt = (struct alx_adapter *)padpt;
-        struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
-        struct odu_bridge_params *params_ptr, params;
+	struct alx_adapter *adpt = container_of(work, struct alx_adapter, ipa_ready_task);
+	struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
+	struct odu_bridge_params *params_ptr, params;
 	int retval = 0;
 	struct alx_hw *hw = &adpt->hw;
-        params_ptr = &params;
+	params_ptr = &params;
 
 	pr_info("%s:%d --- IPA is ready --- \n",__func__,__LINE__);
-        alx_ipa->ipa_ready = true;
+	alx_ipa->ipa_ready = true;
 
 	/* Init IPA Resources */
 	if (alx_ipa_setup_rm(adpt)) {
@@ -4474,6 +4474,15 @@ static void alx_ipa_ready_cb(void *padpt)
 		}
 	}
 }
+
+static void alx_ipa_ready_cb(void *padpt)
+{
+	struct alx_adapter *adpt = (struct alx_adapter *)padpt;
+
+	/* Adding to work queue */
+	schedule_work(&adpt->ipa_ready_task);
+}
+
 
 static ssize_t alx_ipa_debugfs_read_ipa_stats(struct file *file,
                 char __user *user_buf, size_t count, loff_t *ppos)
@@ -4944,7 +4953,6 @@ static int __devinit alx_init(struct pci_dev *pdev,
 	struct net_device *netdev;
 	struct alx_adapter *adpt = NULL;
 	struct alx_hw *hw = NULL;
-	ipa_enable = module_ipa_enable;
 #ifdef MDM_PLATFORM
 	struct alx_ipa_ctx *alx_ipa = NULL;
 #endif
@@ -5027,12 +5035,14 @@ static int __devinit alx_init(struct pci_dev *pdev,
 
 #ifdef MDM_PLATFORM
 	if (ipa_enable) {
-	    /* Init IPA Context */
-	    alx_ipa = kzalloc(sizeof(struct alx_ipa_ctx), GFP_KERNEL);
-	    if (!alx_ipa) {
+		/* Initialize the work for the first time */
+		INIT_WORK(&adpt->ipa_ready_task, alx_ipa_ready_work);
+		/* Init IPA Context */
+		alx_ipa = kzalloc(sizeof(struct alx_ipa_ctx), GFP_KERNEL);
+		if (!alx_ipa) {
 			pr_err("kzalloc err.\n");
 			return -ENOMEM;
-	    } else {
+		} else {
 			adpt->palx_ipa = alx_ipa;
 		}
 	    /* Reset all the flags */
@@ -5513,6 +5523,8 @@ static void __devexit alx_remove(struct pci_dev *pdev)
 
 		/* Cancel ALX IPA Flow Control Work */
 		cancel_work_sync(&adpt->ipa_send_task);
+		/* Cancel ALX IPA Ready Callback */
+		cancel_work_sync(&adpt->ipa_ready_task);
 	}
 #endif
 	/* Release wakelock to ensure that system can goto power collapse*/
@@ -5650,8 +5662,10 @@ static int __init alx_init_module(void)
 
 	printk(KERN_INFO "%s\n", alx_drv_description);
 	/* printk(KERN_INFO "%s\n", "-----ALX_V1.0.0.2-----"); */
+	ipa_enable = module_ipa_enable;
 	ipa_enable? printk("ALX: Software Bridge is Enabled\n"):
 				printk("ALX: Software Bridge is Disabled\n");
+
 	retval = pci_register_driver(&alx_driver);
 
 	return retval;

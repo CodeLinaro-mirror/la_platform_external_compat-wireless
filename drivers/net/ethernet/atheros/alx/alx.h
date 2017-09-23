@@ -911,6 +911,9 @@ extern void alx_reinit_locked(struct alx_adapter *adpt);
 extern void alx_set_ethtool_ops(struct net_device *netdev);
 extern void alx_update_hw_stats(struct alx_adapter *adpt);
 int alx_resize_rings(struct net_device *netdev);
+int alx_open_internal(struct alx_adapter *adpt, u32 ctrl);
+void alx_stop_internal(struct alx_adapter *adpt, u32 ctrl);
+
 #ifdef ETHTOOL_OPS_COMPAT
 extern int ethtool_ioctl(struct ifreq *ifr);
 #endif

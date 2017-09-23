@@ -75,8 +75,6 @@ MODULE_AUTHOR("Qualcomm Corporation, <nic-devel@qualcomm.com>");
 MODULE_DESCRIPTION("Qualcomm Atheros Gigabit Ethernet Driver");
 MODULE_LICENSE("Dual BSD/GPL");
 
-static int alx_open_internal(struct alx_adapter *adpt, u32 ctrl);
-static void alx_stop_internal(struct alx_adapter *adpt, u32 ctrl);
 static void alx_init_ring_ptrs(struct alx_adapter *adpt);
 
 #ifdef MDM_PLATFORM
@@ -3040,7 +3038,7 @@ static int alx_change_mtu(struct net_device *netdev, int new_mtu)
 }
 
 
-static int alx_open_internal(struct alx_adapter *adpt, u32 ctrl)
+int alx_open_internal(struct alx_adapter *adpt, u32 ctrl)
 {
 	struct alx_hw *hw = &adpt->hw;
 	int retval = 0;
@@ -3102,7 +3100,7 @@ err_request_irq:
 }
 
 
-static void alx_stop_internal(struct alx_adapter *adpt, u32 ctrl)
+void alx_stop_internal(struct alx_adapter *adpt, u32 ctrl)
 {
 	struct net_device *netdev = adpt->netdev;
 	struct alx_hw *hw = &adpt->hw;

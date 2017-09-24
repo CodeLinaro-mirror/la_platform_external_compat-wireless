@@ -165,6 +165,9 @@ static int alx_set_settings(struct net_device *netdev,
 		msleep(20);
 	SET_ADPT_FLAG(1, STATE_RESETTING);
 
+	printk(KERN_INFO "ALX: ethtool cmd autoneg %d, speed %d, duplex %d\n",
+           ecmd->autoneg, ecmd->speed, ecmd->duplex);
+
 	old = hw->autoneg_advertised;
 	advertised = 0;
 	if (ecmd->autoneg == AUTONEG_ENABLE) {
@@ -205,6 +208,10 @@ static int alx_set_settings(struct net_device *netdev,
 		hw->cbs.setup_phy_link_speed(hw, old, true,
 				!hw->disable_fc_autoneg);
 	}
+
+        alx_stop_internal(adpt, ALX_OPEN_CTRL_RESET_MAC);
+        alx_open_internal(adpt, ALX_OPEN_CTRL_RESET_MAC);
+
 	CLI_ADPT_FLAG(1, STATE_RESETTING);
 	return error;
 }

@@ -5003,7 +5003,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
 			SET_ADPT_FLAG(2, IPA_RM);
 		}
 	}
-        if (alx_debugfs_init(adpt)) {
+	if (alx_debugfs_init(adpt)) {
 		pr_err("ALX: Debugfs Init failed \n");
 	} else {
 		SET_ADPT_FLAG(2, DEBUGFS_INIT);
@@ -5368,11 +5368,6 @@ static void __devexit alx_remove(struct pci_dev *pdev)
 	/* resume permanent mac address */
 	hw->cbs.set_mac_addr(hw, hw->mac_perm_addr);
 
-	if (adpt->netdev_registered) {
-		unregister_netdev(netdev);
-		adpt->netdev_registered = false;
-	}
-
 	alx_free_all_rtx_queue(adpt);
 	alx_reset_interrupt_param(adpt);
 	alx_reset_interrupt_mode(adpt);
@@ -5380,9 +5375,6 @@ static void __devexit alx_remove(struct pci_dev *pdev)
 	iounmap(adpt->hw.hw_addr);
 	pci_release_selected_regions(pdev,
 				     pci_select_bars(pdev, IORESOURCE_MEM));
-
-	netif_dbg(adpt, probe, adpt->netdev, "complete\n");
-	free_netdev(netdev);
 
 #ifdef MDM_PLATFORM
 	if (CHK_ADPT_FLAG(2, ODU_CONNECT)) {
@@ -5435,6 +5427,14 @@ static void __devexit alx_remove(struct pci_dev *pdev)
 		 pr_err("Couldnt Suspend PCIe MSM Link %d \n",
 				retval);
 #endif
+
+	if (adpt->netdev_registered) {
+	  unregister_netdev(netdev);
+	  adpt->netdev_registered = false;
+	}
+	netif_dbg(adpt, probe, adpt->netdev, "complete\n");
+	free_netdev(netdev);
+
 }
 
 

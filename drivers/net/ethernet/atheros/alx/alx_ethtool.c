@@ -21,6 +21,8 @@
 #include "alx.h"
 #include "alx_hwcom.h"
 
+extern void *ipc_alx_log_ctxt;
+
 #ifdef ETHTOOL_OPS_COMPAT
 #include "alx_compat_ethtool.c"
 #endif
@@ -165,7 +167,7 @@ static int alx_set_settings(struct net_device *netdev,
 		msleep(20);
 	SET_ADPT_FLAG(1, STATE_RESETTING);
 
-	printk(KERN_INFO "ALX: ethtool cmd autoneg %d, speed %d, duplex %d\n",
+	IPC_INFO("ALX: ethtool cmd autoneg %d, speed %d, duplex %d\n",
            ecmd->autoneg, ecmd->speed, ecmd->duplex);
 
 	old = hw->autoneg_advertised;

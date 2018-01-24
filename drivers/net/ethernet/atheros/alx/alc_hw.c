@@ -19,7 +19,7 @@
 #include "alx.h"
 #include "alc_hw.h"
 
-
+extern void *ipc_alx_log_ctxt;
 
 /*
  * get permanent mac address

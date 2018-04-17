@@ -19,6 +19,7 @@
 #include "alx_hwcom.h"
 
 #include <linux/moduleparam.h>
+#include <linux/proc_fs.h>
 #ifdef MDM_PLATFORM
 #include <linux/debugfs.h>
 #include <linux/pm_wakeup.h>

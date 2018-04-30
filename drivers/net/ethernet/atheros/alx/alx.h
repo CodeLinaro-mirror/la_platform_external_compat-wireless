@@ -40,6 +40,8 @@
 #include <linux/aer.h>
 #include <linux/version.h>
 #include <asm/byteorder.h>
+#include <linux/ipc_logging.h>
+
 #ifdef MDM_PLATFORM
 #include <linux/ipa_odu_bridge.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0))
@@ -91,11 +93,133 @@
 #define CONFIG_ALX_RSS
 #endif
 
+#define IPCLOG_STATE_PAGES 2
+#define __FILENAME__ (strrchr(__FILE__, '/') ? \
+	strrchr(__FILE__, '/') + 1 : __FILE__)
+
+#define IPC_EMERG(s, ...) \
+do { \
+	pr_emerg("%s: %s[%u]: " s, __FILENAME__, \
+	__func__, __LINE__, ##__VA_ARGS__); \
+	if (ipc_alx_log_ctxt) { \
+	ipc_log_string(ipc_alx_log_ctxt, \
+		"%s: %s[%u]: IPC EMERG:" s, __FILENAME__ , \
+		__func__, __LINE__, ##__VA_ARGS__); \
+	} \
+} while (0)
+
+#define IPC_DEBUG(s, ...) \
+do { \
+	pr_debug("%s: %s[%u]: " s, __FILENAME__, \
+	__func__, __LINE__, ##__VA_ARGS__); \
+	if (ipc_alx_log_ctxt) { \
+		ipc_log_string(ipc_alx_log_ctxt, \
+		"%s: %s[%u]: IPC DEBUG:" s, __FILENAME__ , \
+		__func__, __LINE__, ##__VA_ARGS__); \
+	} \
+} while (0)
+
+#define IPC_INFO(s, ...) \
+do { \
+	pr_info("%s: %s[%u]: " s, __FILENAME__, \
+	__func__, __LINE__, ##__VA_ARGS__); \
+	if (ipc_alx_log_ctxt) { \
+		ipc_log_string(ipc_alx_log_ctxt, \
+		"%s: %s[%u]: IPC INFO:" s, __FILENAME__ , \
+		__func__, __LINE__, ##__VA_ARGS__);\
+	} \
+} while (0)
+
+#define IPC_ERROR(s, ...) \
+do { \
+	pr_err("%s: %s[%u]: " s, __FILENAME__, \
+	__func__, __LINE__, ##__VA_ARGS__); \
+	if (ipc_alx_log_ctxt) { \
+		ipc_log_string(ipc_alx_log_ctxt, \
+		"%s: %s[%u]: IPC ERROR:" s, __FILENAME__ , \
+		__func__, __LINE__, ##__VA_ARGS__);\
+	} \
+} while (0)
+
+#define IPC_WARN(s, ...) \
+do { \
+	pr_warn("%s: %s[%u]: " s, __FILENAME__, \
+	__func__, __LINE__, ##__VA_ARGS__); \
+	if (ipc_alx_log_ctxt) { \
+	ipc_log_string(ipc_alx_log_ctxt, \
+		"%s: %s[%u]: IPC WARN:" s, __FILENAME__ , \
+		__func__, __LINE__, ##__VA_ARGS__);\
+	} \
+} while (0)
+
+#define IPC_DEBUG_LOW(s, ...) \
+do { \
+	pr_debug("%s: %s[%u]: " s, __FILENAME__, \
+	__func__, __LINE__, ##__VA_ARGS__); \
+	if (ipc_alx_log_ctxt_low) { \
+		ipc_log_string(ipc_alx_log_ctxt_low, \
+		"%s: %s[%u]: IPC DEBUG:" s, __FILENAME__ , \
+		__func__, __LINE__, ##__VA_ARGS__); \
+	} \
+} while (0)
+
+#define IPC_INFO_LOW(s, ...) \
+	do { \
+		pr_info("%s: %s[%u]: " s, __FILENAME__, \
+		__func__, __LINE__, ##__VA_ARGS__); \
+		if (ipc_alx_log_ctxt_low) { \
+			ipc_log_string(ipc_alx_log_ctxt_low, \
+			"%s: %s[%u]: IPC INFO:" s, __FILENAME__ , \
+			__func__, __LINE__, ##__VA_ARGS__);\
+		} \
+	} while (0)
+
+#define IPC_ERROR_LOW(s, ...) \
+do { \
+	pr_err("%s: %s[%u]: " s, __FILENAME__, \
+	__func__, __LINE__, ##__VA_ARGS__); \
+	if (ipc_alx_log_ctxt_low) { \
+		ipc_log_string(ipc_alx_log_ctxt_low, \
+		"%s: %s[%u]: IPC ERROR:" s, __FILENAME__ , \
+		__func__, __LINE__, ##__VA_ARGS__);\
+	} \
+} while (0)
+
+#define IPC_WARN_LOW(s, ...) \
+	do { \
+		pr_warn("%s: %s[%u]: " s, __FILENAME__, \
+		__func__, __LINE__, ##__VA_ARGS__); \
+		if (ipc_alx_log_ctxt_low) { \
+		ipc_log_string(ipc_alx_log_ctxt_low, \
+			"%s: %s[%u]: IPC WARN:" s, __FILENAME__ , \
+			__func__, __LINE__, ##__VA_ARGS__);\
+		} \
+	} while (0)
+
+
 #define ALX_MSG_DEFAULT         0
 
 /* Logging functions and macros */
-#define alx_err(adpt, fmt, ...)	\
-	netdev_err(adpt->netdev, fmt, ##__VA_ARGS__)
+#define alx_err(adpt, fmt, ...)\
+do { \
+	netdev_err(adpt->netdev, fmt, ##__VA_ARGS__); \
+	if (ipc_alx_log_ctxt_low) { \
+		ipc_log_string(ipc_alx_log_ctxt_low, \
+		"%s: %s[%u]: IPC ALX_ERR:" fmt, __FILENAME__ , \
+		__func__, __LINE__, ##__VA_ARGS__);\
+	} \
+} while (0)
+
+#define alx_netif_dbg(adpt, type, netdev, fmt, ...)\
+	do { \
+		netif_dbg(adpt, type, netdev, fmt, ##__VA_ARGS__); \
+		if (ipc_alx_log_ctxt_low) { \
+			ipc_log_string(ipc_alx_log_ctxt_low, \
+			"%s: %s[%u]: IPC ALX_ERR:" fmt, __FILENAME__ , \
+			__func__, __LINE__, ##__VA_ARGS__);\
+		} \
+	} while (0)
+
 
 #define ALX_VLAN_TO_TAG(_vlan, _tag) \
 	do { \

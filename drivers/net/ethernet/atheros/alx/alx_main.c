@@ -405,7 +405,7 @@ static void alx_set_multicase_list(struct net_device *netdev)
 {
 	struct alx_adapter *adpt = netdev_priv(netdev);
 	struct alx_hw *hw = &adpt->hw;
-	struct netdev_hw_addr *ha;
+	struct netdev_hw_addr *ha = NULL;
 
 	/* Check for Promiscuous and All Multicast modes */
 	if (netdev->flags & IFF_PROMISC) {
@@ -601,7 +601,7 @@ static void alx_receive_skb(struct alx_adapter *adpt,
                             u16 vlan_tag, bool vlan_flag)
 {
 	if (vlan_flag) {
-		u16 vlan;
+		u16 vlan = 0;
 		ALX_TAG_TO_VLAN(vlan_tag, vlan);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
 		/*alx MAC only recognize ETH_P_8021Q*/
@@ -630,7 +630,7 @@ static void alx_receive_skb_ipa(struct alx_adapter *adpt,
 	struct alx_ipa_ctx *alx_ipa = adpt->palx_ipa;
 	skb_reset_mac_header(skb);
 	if (vlan_flag) {
-		u16 vlan;
+	u16 vlan = 0;
 		ALX_TAG_TO_VLAN(vlan_tag, vlan);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
                 __vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), vlan);
@@ -4122,7 +4122,7 @@ static netdev_tx_t alx_start_xmit_frame(struct alx_adapter *adpt,
 	if (unlikely(vlan_tx_tag_present(skb))) {
 		u16 vlan = vlan_tx_tag_get(skb);
 #endif
-		u16 tag;
+		u16 tag = 0;
 		ALX_VLAN_TO_TAG(vlan, tag);
 		stpd.genr.vlan_tag = tag;
 		stpd.genr.instag = 0x1;

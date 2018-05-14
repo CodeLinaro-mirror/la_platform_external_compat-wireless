@@ -5745,13 +5745,17 @@ module_init(alx_init_module);
 
 static void __exit alx_exit_module(void)
 {
+
+        pci_unregister_driver(&alx_driver);
+
 	if (ipc_alx_log_ctxt != NULL)
 		ipc_log_context_destroy(ipc_alx_log_ctxt);
+        ipc_alx_log_ctxt = NULL;
 
 	if (ipc_alx_log_ctxt_low != NULL)
 		ipc_log_context_destroy(ipc_alx_log_ctxt_low);
+        ipc_alx_log_ctxt_low = NULL;
 
-	pci_unregister_driver(&alx_driver);
 }
 
 

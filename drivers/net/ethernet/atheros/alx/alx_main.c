@@ -4895,6 +4895,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
 #endif
 	static int cards_found;
 	int retval;
+	bool is_ipa_ready = false;
         struct odu_bridge_params *params_ptr, params;
         params_ptr = &params;
 
@@ -4997,12 +4998,15 @@ static int __devinit alx_init(struct pci_dev *pdev,
 	adpt->msg_enable = ALX_MSG_DEFAULT;
 
 #ifdef MDM_PLATFORM
+        /*If IPA is Ready now, ODU bridge init will be taken care in here at probe.
+          if not, everything will be handled in workqueue scheduled only, none at probe*/
 	retval = ipa_register_ipa_ready_cb(alx_ipa_ready_cb, (void *)adpt);
 	if (retval < 0) {
 		if (retval == -EEXIST) {
 			pr_info("%s:%d -- IPA is Ready retval %d \n",
 					__func__,__LINE__,retval);
 			alx_ipa->ipa_ready = true;
+                        is_ipa_ready = true;
 		} else {
 			pr_info("%s:%d -- IPA is Not Ready retval %d \n",
 					__func__,__LINE__,retval);
@@ -5010,7 +5014,9 @@ static int __devinit alx_init(struct pci_dev *pdev,
 		}
 	}
 
-	if (alx_ipa->ipa_ready == true)
+        /*use is_ipa_ready check here as alx_ipa->ipa_ready will be
+           modified in ipa Work queue in parallel*/
+	if (is_ipa_ready == true)
 	{
 		if (alx_ipa_setup_rm(adpt)) {
 			pr_err("ALX: IPA Setup RM Failed \n");
@@ -5255,7 +5261,7 @@ static int __devinit alx_init(struct pci_dev *pdev,
 
 #ifdef MDM_PLATFORM
 	/* Initialize the ODU bridge driver now: odu_bridge_init()*/
-	if (alx_ipa->ipa_ready == true) {
+	if (is_ipa_ready == true) {
 		params_ptr->netdev_name = netdev->name;
 		params_ptr->priv = adpt;
 		params.tx_dp_notify = alx_ipa_tx_dp_cb;

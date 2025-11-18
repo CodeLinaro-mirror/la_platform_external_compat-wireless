@@ -39,6 +39,12 @@ BEGIN {
 	sub(/:/, "", country)
 	printf "static const struct ieee80211_regdomain regdom_%s = {\n", country
 	printf "\t.alpha2 = \"%s\",\n", country
+	if ($NF ~ /DFS-ETSI/)
+		printf "\t.dfs_region = NL80211_DFS_ETSI,\n"
+	else if ($NF ~ /DFS-FCC/)
+		printf "\t.dfs_region = NL80211_DFS_FCC,\n"
+	else if ($NF ~ /DFS-JP/)
+		printf "\t.dfs_region = NL80211_DFS_JP,\n"
 	printf "\t.reg_rules = {\n"
 	active = 1
 	regdb = regdb "\t&regdom_" country ",\n"
@@ -50,18 +56,18 @@ active && /^[ \t]*\(/ {
 	end = $3
 	bw = $5
 	sub(/\),/, "", bw)
-	gain = $6
-	sub(/\(/, "", gain)
-	sub(/,/, "", gain)
-	power = $7
+	gain = 0
+	power = $6
+	sub(/\(/, "", power)
 	sub(/\)/, "", power)
-	sub(/,/, "", power)
 	# power might be in mW...
-	units = $8
+	units = $7
 	sub(/\)/, "", units)
 	sub(/,/, "", units)
 	if (units == "mW") {
-		if (power == 100) {
+		if (power == 10) {
+			power = 10
+		} else if (power == 100) {
 			power = 20
 		} else if (power == 200) {
 			power = 23
@@ -74,7 +80,7 @@ active && /^[ \t]*\(/ {
 		}
 	}
 	flagstr = ""
-	for (i=8; i<=NF; i++)
+	for (i=7; i<=NF; i++)
 		flagstr = flagstr $i
 	split(flagstr, flagarray, ",")
 	flags = ""

@@ -67,10 +67,14 @@ active && /^[ \t]*\(/ {
 	if (units == "mW") {
 		if (power == 10) {
 			power = 10
+		} else if (power == 25) {
+			power = 14
 		} else if (power == 100) {
 			power = 20
 		} else if (power == 200) {
 			power = 23
+		} else if (power == 250) {
+			power = 24
 		} else if (power == 500) {
 			power = 27
 		} else if (power == 1000) {
